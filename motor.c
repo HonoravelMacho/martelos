@@ -2,13 +2,15 @@
 
 static char* CACHE_ESTEIRA = NULL;
 static long TAMANHO_CACHE = 0;
-static int TIPO_CACHE = -1; 
+static int TIPO_CACHE = -1; // 1: Pi, 2: Custom, 3: Catalan, 4: Apery, 5: Clausen, 6: Arctan, 7: Log3
 static char FORMULA_ATUAL[256] = "";
 
 void limpar_cache_esteira() {
     if (CACHE_ESTEIRA) { free(CACHE_ESTEIRA); CACHE_ESTEIRA = NULL; }
     TAMANHO_CACHE = 0; TIPO_CACHE = -1;
 }
+
+// --- Motores de Cálculo de Alta Precisão ---
 
 char* calcular_pi_gmp(long precisao_digitos) {
     unsigned long bits = (unsigned long)((precisao_digitos + 100) * 3.321928);
@@ -109,10 +111,29 @@ char* calcular_arctan_gmp(long precisao_digitos) {
     return str;
 }
 
+char* calcular_log3_gmp(long precisao_digitos) {
+    unsigned long bits = (unsigned long)((precisao_digitos + 100) * 3.321928);
+    mpf_set_default_prec(bits);
+    mpf_t res, termo, den, tres_k;
+    mpf_inits(res, termo, den, tres_k, NULL);
+    mpf_set_ui(res, 0);
+    for (unsigned long k = 1; k < 10000; k++) {
+        mpf_set_ui(tres_k, 3); mpf_pow_ui(tres_k, tres_k, k);
+        mpf_mul_ui(den, tres_k, k);
+        mpf_ui_div(termo, 1, den);
+        mpf_add(res, res, termo);
+        if (k > 100 && mpf_cmp_d(termo, 1e-25) == 0) break;
+    }
+    mp_exp_t exp;
+    char* str = mpf_get_str(NULL, &exp, 10, precisao_digitos + 5, res);
+    mpf_clears(res, termo, den, tres_k, NULL);
+    return str;
+}
+
 char* obter_esteira_numerica(int tipo_constante, const char* formula, long precisao_necessaria) {
     long precisao_real = precisao_necessaria + 100;
     if (TIPO_CACHE == tipo_constante && TAMANHO_CACHE >= precisao_real) {
-        if (tipo_constante == 1 || (tipo_constante >= 3 && tipo_constante <= 6)) return CACHE_ESTEIRA;
+        if (tipo_constante == 1 || (tipo_constante >= 3 && tipo_constante <= 7)) return CACHE_ESTEIRA;
         if (tipo_constante == 2 && strcmp(FORMULA_ATUAL, formula) == 0) return CACHE_ESTEIRA;
     }
     limpar_cache_esteira();
@@ -122,15 +143,13 @@ char* obter_esteira_numerica(int tipo_constante, const char* formula, long preci
     else if (tipo_constante == 4) { printf("(Apery)... "); CACHE_ESTEIRA = calcular_apery_gmp(precisao_real); }
     else if (tipo_constante == 5) { printf("(Clausen)... "); CACHE_ESTEIRA = calcular_clausen_gmp(precisao_real); }
     else if (tipo_constante == 6) { printf("(Arctan)... "); CACHE_ESTEIRA = calcular_arctan_gmp(precisao_real); }
+    else if (tipo_constante == 7) { printf("(Log3)... "); CACHE_ESTEIRA = calcular_log3_gmp(precisao_real); }
     else {
         printf("(%s)... ", formula);
         extern char* calcular_formula_custom(const char* f, long p);
         CACHE_ESTEIRA = calcular_formula_custom(formula, precisao_real);
         strncpy(FORMULA_ATUAL, formula, 255);
     }
-    fflush(stdout);
-    TIPO_CACHE = tipo_constante;
-    TAMANHO_CACHE = precisao_real;
-    printf("OK!\n");
+    fflush(stdout); TIPO_CACHE = tipo_constante; TAMANHO_CACHE = precisao_real; printf("OK!\n");
     return CACHE_ESTEIRA;
 }
