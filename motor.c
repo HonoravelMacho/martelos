@@ -2,7 +2,7 @@
 
 static char* CACHE_ESTEIRA = NULL;
 static long TAMANHO_CACHE = 0;
-static int TIPO_CACHE = -1; // 1: Pi, 2: Custom, 3: Catalan, 4: Apery, 5: Clausen, 6: Arctan, 7: Log3
+static int TIPO_CACHE = -1; 
 static char FORMULA_ATUAL[256] = "";
 
 void limpar_cache_esteira() {
@@ -10,7 +10,7 @@ void limpar_cache_esteira() {
     TAMANHO_CACHE = 0; TIPO_CACHE = -1;
 }
 
-// --- Motores de Cálculo de Alta Precisão ---
+// --- Motores de Cálculo GMP ---
 
 char* calcular_pi_gmp(long precisao_digitos) {
     unsigned long bits = (unsigned long)((precisao_digitos + 100) * 3.321928);
@@ -131,7 +131,10 @@ char* calcular_log3_gmp(long precisao_digitos) {
 }
 
 char* obter_esteira_numerica(int tipo_constante, const char* formula, long precisao_necessaria) {
-    long precisao_real = precisao_necessaria + 100;
+    long MAX_ESTEIRA = 1000000; 
+    long precisao_real = (precisao_necessaria > MAX_ESTEIRA) ? MAX_ESTEIRA : precisao_necessaria;
+    precisao_real += 100;
+
     if (TIPO_CACHE == tipo_constante && TAMANHO_CACHE >= precisao_real) {
         if (tipo_constante == 1 || (tipo_constante >= 3 && tipo_constante <= 7)) return CACHE_ESTEIRA;
         if (tipo_constante == 2 && strcmp(FORMULA_ATUAL, formula) == 0) return CACHE_ESTEIRA;

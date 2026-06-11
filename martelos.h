@@ -34,4 +34,6 @@ char* decifrar_texto(const char* texto_cripto, long casa_inicial, int tipo_const
 
 char* obter_esteira_bbp(int constante, long precisao);
 
+void processar_arquivo_binario(int tipo_const, const char* formula, int acao, int modo_glitch);
+
 #endif

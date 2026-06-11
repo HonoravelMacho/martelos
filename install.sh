@@ -38,5 +38,19 @@ else
     cp martelos $BIN_DIR/
 fi
 
+# --- CRIAÇÃO DAS PASTAS DE TRABALHO M.A.R.T.E.L.O.S. ---
+echo "🔨 Configurando bancada de trabalho..."
+if [ -d "$HOME/storage/downloads" ]; then
+    # Android Termux
+    BASE_DIR="$HOME/storage/downloads/martelos"
+else
+    # Linux Desktop
+    BASE_DIR="$HOME/Downloads/martelos"
+fi
+
+mkdir -p "$BASE_DIR/entrada"
+mkdir -p "$BASE_DIR/saida"
+echo "✅ Pastas criadas com sucesso em: $BASE_DIR"
+
 echo "✅ M.A.R.T.E.L.O.S. pronto! Digite 'martelos' para rodar."
 cd ../.. && rm -rf martelos_temp
