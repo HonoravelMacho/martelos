@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e  # Isso faz o script parar imediatamente se qualquer comando der erro
 
 # Detectar ambiente
 if [ -d "/data/data/com.termux/files/usr/bin" ]; then

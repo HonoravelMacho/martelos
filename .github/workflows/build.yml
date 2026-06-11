@@ -1,0 +1,29 @@
+name: Build Martelos
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Dependencies
+      run: sudo apt-get update && sudo apt-get install -y libgmp-dev cmake build-essential
+
+    - name: Configure CMake
+      run: mkdir build && cd build && cmake ..
+
+    - name: Build
+      run: cd build && make
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: martelos-linux-x86_64
+        path: build/martelos
