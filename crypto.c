@@ -1,5 +1,7 @@
 #include "martelos.h"
 
+// --- Engrenagens de Quiasmo (Base do Motor) ---
+
 void aplicar_quiasmo(char** elementos, int total) {
     if (total <= 2) return;
     char** temp = malloc(total * sizeof(char*));
@@ -36,44 +38,58 @@ long calcular_casa_quiasmo(const char* frase, int* out_n) {
     return (soma <= 0) ? 1 : soma;
 }
 
-char* cifrar_texto(const char* texto_puro, long salto, int tipo_const, const char* formula) {
-    char* texto = remover_acentos_e_upper(texto_puro);
-    long len = strlen(texto);
-    long prec = salto + (len * 40) + 1000;
-    char* esteira = obter_esteira_numerica(tipo_const, formula, prec);
-    char* res = malloc(len + 1);
-    long ptr = salto;
-    for (long i = 0; i < len; i++) {
-        int v = caractere_para_num(texto[i]);
-        if (v != -1) {
-            char n_str[3] = { esteira[ptr], esteira[ptr+1], '\0' };
-            int shift = atoi(n_str);
-            res[i] = num_para_caractere(v + shift);
-            ptr += v;
-        } else res[i] = texto[i];
+// --- Motores N-Layers (Modo Texto) ---
+
+char* cifrar_texto_n_camadas(const char* texto_puro, long* casas, int n_camadas, int tipo_const, const char* formula) {
+    char* resultado = remover_acentos_e_upper(texto_puro);
+    
+    for (int c = 0; c < n_camadas; c++) {
+        long len = strlen(resultado);
+        // A Frase 1 (casas[0]) é sempre a âncora inicial
+        char* esteira = obter_esteira_numerica(tipo_const, formula, casas[0] + (len * 50) + 1000);
+        char* novo = malloc(len + 1);
+        long ptr = casas[0]; 
+
+        for (long i = 0; i < len; i++) {
+            int v = caractere_para_num(resultado[i]);
+            if (v != -1) {
+                // Soma o deslocamento da camada atual (casas[c]) ao ponteiro
+                long p_local = ptr + casas[c];
+                int shift = (esteira[p_local % 1000000] - '0') * 10 + (esteira[(p_local+1) % 1000000] - '0');
+                novo[i] = num_para_caractere(v + shift);
+                ptr += v;
+            } else novo[i] = resultado[i];
+        }
+        novo[len] = '\0';
+        free(resultado);
+        resultado = novo;
     }
-    res[len] = '\0';
-    free(texto);
-    return res;
+    return resultado;
 }
 
-char* decifrar_texto(const char* texto_cripto, long salto, int tipo_const, const char* formula) {
-    long len = strlen(texto_cripto);
-    long prec = salto + (len * 40) + 1000;
-    char* esteira = obter_esteira_numerica(tipo_const, formula, prec);
-    char* res = malloc(len + 1);
-    long ptr = salto;
-    for (long i = 0; i < len; i++) {
-        int v = caractere_para_num(texto_cripto[i]);
-        if (v != -1) {
-            char n_str[3] = { esteira[ptr], esteira[ptr+1], '\0' };
-            int shift = atoi(n_str);
-            int v_orig = (v - shift);
-            while (v_orig <= 0) v_orig += MODULO;
-            res[i] = num_para_caractere(v_orig);
-            ptr += v_orig;
-        } else res[i] = texto_cripto[i];
+char* decifrar_texto_n_camadas(const char* texto_cripto, long* casas, int n_camadas, int tipo_const, const char* formula) {
+    char* resultado = strdup(texto_cripto);
+    
+    for (int c = n_camadas - 1; c >= 0; c--) {
+        long len = strlen(resultado);
+        char* esteira = obter_esteira_numerica(tipo_const, formula, casas[0] + (len * 50) + 1000);
+        char* novo = malloc(len + 1);
+        long ptr = casas[0];
+
+        for (long i = 0; i < len; i++) {
+            int v = caractere_para_num(resultado[i]);
+            if (v != -1) {
+                long p_local = ptr + casas[c];
+                int shift = (esteira[p_local % 1000000] - '0') * 10 + (esteira[(p_local+1) % 1000000] - '0');
+                int v_orig = v - shift;
+                while (v_orig <= 0) v_orig += MODULO;
+                novo[i] = num_para_caractere(v_orig);
+                ptr += v_orig;
+            } else novo[i] = resultado[i];
+        }
+        novo[len] = '\0';
+        free(resultado);
+        resultado = novo;
     }
-    res[len] = '\0';
-    return res;
+    return resultado;
 }
