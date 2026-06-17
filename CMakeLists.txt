@@ -1,13 +1,12 @@
 cmake_minimum_required(VERSION 3.10)
-project(Martelos C)
+project(martelos C)
 
 set(CMAKE_C_STANDARD 11)
 
+# Procura a biblioteca GMP
 find_library(GMP_LIB gmp)
-if(NOT GMP_LIB)
-    message(FATAL_ERROR "Biblioteca GMP não encontrada!")
-endif()
 
+# Define os arquivos fonte
 set(SOURCES
     main.c
     alfabeto.c
@@ -19,5 +18,6 @@ set(SOURCES
 )
 
 add_executable(martelos ${SOURCES})
-target_link_libraries(martelos ${GMP_LIB})
-install(TARGETS martelos DESTINATION /usr/local/bin)
+
+# LIGA AS BIBLIOTECAS: gmp para os números e m para a matemática (sin/cos)
+target_link_libraries(martelos gmp m)
