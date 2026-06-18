@@ -3,13 +3,13 @@
 void lb() { int c; while ((c = getchar()) != '\n' && c != EOF); }
 
 void banner() { 
-    printf("\n===================================================================\n                   🔨 Projeto M.A.R.T.E.L.O.S.  \n   \"Motor Algébrico Ruptivo Transformacional Experimental\"\n              \"Livre e Open Source\" (v5.7.0)\n===================================================================\n"); 
+    printf("\n===================================================================\n                   🔨 Projeto M.A.R.T.E.L.O.S.  \n   \"Motor Algébrico Ruptivo Transformacional Experimental\"\n              \"Livre e Open Source\" (v5.7.1)\n===================================================================\n"); 
 }
 
 int menu_constantes(int *tipo, char *formula) {
     printf("\n--- ESCOLHA A CONSTANTE ALGEBRICA ---\n");
     printf("1 - Pi\n2 - Catalan\n3 - Apery\n4 - Clausen\n5 - Arctan\n6 - Log3\n7 - Custom (Fórmula)\n0 - Voltar\nEscolha: ");
-    char op[10]; fgets(op, 10, stdin);
+    char op[10]; if(!fgets(op, 10, stdin)) return 0;
     int s = atoi(op);
     if (s == 0) return 0;
     if (s == 7) {
@@ -63,9 +63,9 @@ int main() {
         else if (p == 2) {
             printf("\n--- MODO MULTIMIDIA ---\n");
             printf("1 - Martelos (Qualquer arquivo -> .martelos)\n");
-            printf("2 - Imagens  (Conversao automatica para .bmp)\n");
-            printf("3 - Audios   (Conversao automatica para .wav)\n");
-            printf("4 - Videos   (Livre - escolha sua saida)\n");
+            printf("2 - Imagens  (JPG, PNG, WEBP, GIF, TIFF, SVG, etc -> .bmp)\n");
+            printf("3 - Audios   (MP3, FLAC, M4A, AAC, OGG, WMA, etc -> .wav)\n");
+            printf("4 - Videos   (Livre - AVI, MP4, MKV, MOV, MPG, etc)\n");
             printf("0 - Voltar\nEscolha: ");
             int sub = atoi(fgets(op, 10, stdin));
             if (sub == 0) continue;
