@@ -1,55 +1,40 @@
 #include "martelos.h"
+#include <sys/stat.h>
+#include <sys/types.h>
 
 char* ler_texto_ctrl_d(const char* instrucao) {
-    printf("%s", instrucao);
-    printf("\n(Pressione Ctrl+D em uma linha vazia para finalizar)\n---\n");
-    
-    size_t capacidade = 2048;
-    size_t tamanho = 0;
-    char* buffer = malloc(capacidade);
-    int c;
-
-    while ((c = getchar()) != EOF) {
-        buffer[tamanho++] = (char)c;
-        if (tamanho >= capacidade - 1) {
-            capacidade *= 2;
-            buffer = realloc(buffer, capacidade);
-        }
+    printf("%s\n(Ctrl+D para finalizar ou digite '0' e Enter para cancelar)\n---\n", instrucao);
+    size_t cap = 2048, tam = 0; char* buf = malloc(cap); int c;
+    while ((c = getchar()) != EOF) { 
+        buf[tam++] = (char)c; 
+        if (tam >= cap - 1) { cap *= 2; buf = realloc(buf, cap); } 
     }
-    buffer[tamanho] = '\0';
-
-    // REMOÇÃO DO "FANTASMA DO W": 
-    // Se o último caractere for um Enter logo antes do EOF, nós o limpamos
-    // para evitar que o motor tente descriptografar o "vazio".
-    if (tamanho > 0 && buffer[tamanho-1] == '\n') {
-        buffer[tamanho-1] = '\0';
-    }
-
+    buf[tam] = '\0';
+    if (tam > 0 && buf[tam-1] == '\n') buf[tam-1] = '\0';
     clearerr(stdin);
-    return buffer;
+    return buf;
 }
 
-void salvar_em_arquivo(const char* nome_arquivo, const char* conteudo) {
-    char caminho_final[512];
-    const char* home = getenv("HOME");
+void salvar_em_arquivo(const char* nome, const char* cont) {
+    char path[1024];
+    const char* h = getenv("HOME");
     
-    #ifdef __ANDROID__
-        snprintf(caminho_final, sizeof(caminho_final), "%s/storage/downloads/%s", home, nome_arquivo);
-    #else
-        snprintf(caminho_final, sizeof(caminho_final), "%s/Downloads/%s", home, nome_arquivo);
-    #endif
-
-    FILE *f = fopen(caminho_final, "w");
-    if (f == NULL) {
-        f = fopen(nome_arquivo, "w");
-        strcpy(caminho_final, nome_arquivo);
-    }
-
+    // 1. Define o caminho da pasta de textos
+    snprintf(path, 1024, "%s/Downloads/martelos/textos_salvos", h);
+    
+    // 2. Cria a pasta se não existir (Permissão 0755)
+    mkdir(path, 0755);
+    
+    // 3. Define o caminho completo do arquivo
+    char full_path[2048];
+    snprintf(full_path, 2048, "%s/%s", path, nome);
+    
+    FILE *f = fopen(full_path, "w");
     if (f) {
-        fprintf(f, "%s", conteudo);
+        fprintf(f, "%s", cont);
         fclose(f);
-        printf("\n[💾] Sucesso! Arquivo salvo em: %s\n", caminho_final);
+        printf("\n[💾] SOBERANIA GARANTIDA! Texto salvo em:\n--> %s\n", full_path);
     } else {
-        printf("\n[!] Erro ao criar arquivo.\n");
+        printf("\n[❌] Erro ao salvar arquivo. Verifique as permissoes.\n");
     }
 }
