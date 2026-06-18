@@ -12,37 +12,39 @@ else
     PKG_MGR="sudo apt install -y"
 fi
 
-echo "🔨 Instalando M.A.R.T.E.L.O.S. v5.7.1 no $OS..."
+echo "🔨 Instalando M.A.R.T.E.L.O.S. v5.7.2 no $OS..."
 
 # 1. Instalar Dependências
+echo "📦 Instalando dependências..."
 if [ "$OS" = "Linux" ]; then
     sudo apt update
-    $PKG_MGR libgmp-dev cmake build-essential git ffmpeg
+    sudo apt install -y libgmp-dev cmake build-essential git ffmpeg
 else
     pkg update
-    $PKG_MGR libgmp cmake clang git ffmpeg
+    pkg install -y libgmp cmake clang git ffmpeg
 fi
 
 # 2. Compilar
-echo "⚙️ Compilando Motor Algébrico..."
+echo "⚙️ Compilando Motor Algébrico com Otimização Máxima..."
 gcc -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm
 
-# 3. Instalar Binário
-echo "🚀 Movendo para o PATH..."
+# 3. Instalar Binário no PATH
+echo "🚀 Disponibilizando comando global..."
 if [ "$OS" = "Linux" ]; then
     sudo mv martelos $PREFIX/bin/
 else
     mv martelos $PREFIX/bin/
 fi
 
-# 4. Criar Pastas de Trabalho
-echo "📁 Configurando Bancada de Trabalho..."
+# 4. Criar Pastas de Trabalho (Bancada de Mídia)
+echo "📁 Configurando diretórios de soberania..."
 BASE_DIR="$HOME/Downloads/martelos"
 mkdir -p "$BASE_DIR/entrada"
 mkdir -p "$BASE_DIR/saida"
 mkdir -p "$BASE_DIR/textos_salvos"
 
 echo "================================================="
-echo "✅ M.A.R.T.E.L.O.S. INSTALADO COM SUCESSO!"
-echo "Digite 'martelos' em qualquer lugar para rodar."
+echo "✅ M.A.R.T.E.L.O.S. v5.7.2 INSTALADO!"
+echo "Digite 'martelos' em qualquer lugar para operar."
+echo "Pastas criadas em: $BASE_DIR"
 echo "================================================="

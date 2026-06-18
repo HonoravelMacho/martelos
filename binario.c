@@ -1,6 +1,7 @@
 #include "martelos.h"
 #include <dirent.h>
 #include <unistd.h>
+#include <time.h>
 
 void listar_arquivos_entrada(char* cam) {
     DIR *d = opendir(cam);
@@ -47,7 +48,6 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
 
     long h_size = 0;
 
-    // LÓGICA DE CONVERSÃO COM EXTENSÕES EXPLÍCITAS
     if (sub_modo == 1) { // MARTELOS
         sprintf(no, "%s.martelos", ni);
         h_size = 0;
@@ -58,7 +58,7 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
         sprintf(no, "%s_glitch.bmp", nome_base);
         h_size = 54;
         if (acao == 1) {
-            snprintf(f_tmp, 1024, "%s_intermediario.bmp", pi); // AGORA COM EXTENSÃO .BMP
+            snprintf(f_tmp, 1024, "%s_intermediario.bmp", pi);
             sprintf(cmd, "ffmpeg -i \"%s\" -y -pix_fmt bgr24 \"%s\" > /dev/null 2>&1", fip, f_tmp);
             if (system(cmd) != 0) { printf("\n[❌] Falha do FFmpeg ao converter para BMP.\n"); return; }
         } else strcpy(f_tmp, fip);
@@ -68,7 +68,7 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
         sprintf(no, "%s_glitch.wav", nome_base);
         h_size = 44;
         if (acao == 1) {
-            snprintf(f_tmp, 1024, "%s_intermediario.wav", pi); // AGORA COM EXTENSÃO .WAV
+            snprintf(f_tmp, 1024, "%s_intermediario.wav", pi);
             sprintf(cmd, "ffmpeg -i \"%s\" -y -acodec pcm_s16le -ar 44100 \"%s\" > /dev/null 2>&1", fip, f_tmp);
             if (system(cmd) != 0) { printf("\n[❌] Falha do FFmpeg ao converter para WAV.\n"); return; }
         } else strcpy(f_tmp, fip);
@@ -112,6 +112,8 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
     unsigned char *buf = malloc(65536);
 
     printf("[⚙️] Prensando..."); fflush(stdout);
+    clock_t t_ini = clock(); // INÍCIO DO CRONÔMETRO
+
     while (!feof(fin)) {
         size_t r = fread(buf, 1, 65536, fin);
         if (r <= 0) break;
@@ -129,8 +131,10 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
         fwrite(buf, 1, r, fout);
     }
 
+    double t_fim = (double)(clock() - t_ini) / CLOCKS_PER_SEC; // FIM DO CRONÔMETRO
+
     fclose(fin); fclose(fout);
     if ((sub_modo == 2 || sub_modo == 3) && acao == 1) unlink(f_tmp);
     free(buf); free(cs);
-    printf(" OK!\n[✅] Finalizado em: %s\n", no);
+    printf(" OK! (em %.6fs)\n[✅] Finalizado em: %s\n", t_fim, no);
 }

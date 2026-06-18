@@ -3,7 +3,7 @@
 void lb() { int c; while ((c = getchar()) != '\n' && c != EOF); }
 
 void banner() { 
-    printf("\n===================================================================\n                   🔨 Projeto M.A.R.T.E.L.O.S.  \n   \"Motor Algébrico Ruptivo Transformacional Experimental\"\n              \"Livre e Open Source\" (v5.7.1)\n===================================================================\n"); 
+    printf("\n===================================================================\n                   🔨 Projeto M.A.R.T.E.L.O.S.  \n   \"Motor Algébrico Ruptivo Transformacional Experimental\"\n              \"Livre e Open Source\" (v5.7.2)\n===================================================================\n"); 
 }
 
 int menu_constantes(int *tipo, char *formula) {
@@ -39,7 +39,7 @@ void executar_texto(int tipo, const char* f, int acao) {
     }
     printf("\n[⚙️] Processando... "); fflush(stdout); clock_t ini = clock();
     char* res = (acao == 1) ? cifrar_texto_n_camadas(t, cs, n, tipo, f) : decifrar_texto_n_camadas(t, cs, n, tipo, f);
-    printf("OK!\n\n--- RESULTADO (em %.4fs) ---\n%s\n", (double)(clock()-ini)/CLOCKS_PER_SEC, res);
+    printf("OK!\n\n--- RESULTADO (em %.6fs) ---\n%s\n", (double)(clock()-ini)/CLOCKS_PER_SEC, res);
     printf("\nSalvar (s/n)? "); char s; if (scanf(" %c", &s)==1 && (s=='s'||s=='S')) { char nm[100]; printf("Nome: "); scanf("%99s", nm); salvar_em_arquivo(nm, res); }
     free(t); free(cs); free(res); lb();
 }
