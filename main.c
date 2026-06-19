@@ -3,7 +3,7 @@
 void lb() { int c; while ((c = getchar()) != '\n' && c != EOF); }
 
 void banner() { 
-    printf("\n===================================================================\n                   🔨 Projeto M.A.R.T.E.L.O.S.  \n   \"Motor Algébrico Ruptivo Transformacional Experimental\"\n              \"Livre e Open Source\" (v5.7.2)\n===================================================================\n"); 
+    printf("\n===================================================================\n                   🔨 Projeto M.A.R.T.E.L.O.S.  \n   \"Motor Algébrico Ruptivo Transformacional Experimental\"\n              \"Livre e Open Source\" (v5.8.0)\n===================================================================\n"); 
 }
 
 int menu_constantes(int *tipo, char *formula) {
@@ -65,7 +65,7 @@ int main() {
             printf("1 - Martelos (Qualquer arquivo -> .martelos)\n");
             printf("2 - Imagens  (JPG, PNG, WEBP, GIF, TIFF, SVG, etc -> .bmp)\n");
             printf("3 - Audios   (MP3, FLAC, M4A, AAC, OGG, WMA, etc -> .wav)\n");
-            printf("4 - Videos   (Livre - AVI, MP4, MKV, MOV, MPG, etc)\n");
+            printf("4 - Videos   (Retro-Glitch -> .avi / Chiado Cinza)\n");
             printf("0 - Voltar\nEscolha: ");
             int sub = atoi(fgets(op, 10, stdin));
             if (sub == 0) continue;

@@ -47,38 +47,46 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
     if(ext) nome_base[ext - ni] = '\0';
 
     long h_size = 0;
+    long tail_prot = 0;
 
-    if (sub_modo == 1) { // MARTELOS
+    // CONFIGURAÇÃO DE TRANSMUTAÇÃO
+    if (sub_modo == 1) { // MARTELOS GERAL
         sprintf(no, "%s.martelos", ni);
         h_size = 0;
         strcpy(f_tmp, fip);
     } 
-    else if (sub_modo == 2) { // IMAGENS
+    else if (sub_modo == 2) { // IMAGENS -> BMP
         if (!ext || !is_image(ext)) { printf("\n[❌] Formato incompativel para Imagem.\n"); return; }
         sprintf(no, "%s_glitch.bmp", nome_base);
         h_size = 54;
         if (acao == 1) {
-            snprintf(f_tmp, 1024, "%s_intermediario.bmp", pi);
+            snprintf(f_tmp, 1024, "%s_tmp.bmp", pi);
             sprintf(cmd, "ffmpeg -i \"%s\" -y -pix_fmt bgr24 \"%s\" > /dev/null 2>&1", fip, f_tmp);
-            if (system(cmd) != 0) { printf("\n[❌] Falha do FFmpeg ao converter para BMP.\n"); return; }
+            if (system(cmd) != 0) { printf("\n[❌] Erro FFmpeg.\n"); return; }
         } else strcpy(f_tmp, fip);
     }
-    else if (sub_modo == 3) { // AUDIOS
+    else if (sub_modo == 3) { // AUDIOS -> WAV
         if (!ext || !is_audio(ext)) { printf("\n[❌] Formato incompativel para Audio.\n"); return; }
         sprintf(no, "%s_glitch.wav", nome_base);
         h_size = 44;
         if (acao == 1) {
-            snprintf(f_tmp, 1024, "%s_intermediario.wav", pi);
+            snprintf(f_tmp, 1024, "%s_tmp.wav", pi);
             sprintf(cmd, "ffmpeg -i \"%s\" -y -acodec pcm_s16le -ar 44100 \"%s\" > /dev/null 2>&1", fip, f_tmp);
-            if (system(cmd) != 0) { printf("\n[❌] Falha do FFmpeg ao converter para WAV.\n"); return; }
+            if (system(cmd) != 0) { printf("\n[❌] Erro FFmpeg.\n"); return; }
         } else strcpy(f_tmp, fip);
     }
-    else if (sub_modo == 4) { // VIDEOS
-        printf("Extensao final desejada (ex: .ts, .mpg) ou 0 para Voltar: "); scanf("%255s", no);
-        if (strcmp(no, "0") == 0) return;
-        char final_no[300]; sprintf(final_no, "%s_glitch%s", nome_base, no); strcpy(no, final_no);
-        h_size = 10240; 
-        strcpy(f_tmp, fip);
+    else if (sub_modo == 4) { // VIDEOS -> AVI RAW (RETRO-GLITCH)
+        sprintf(no, "%s_glitch.avi", nome_base);
+        h_size = 10240;      // 10KB Header Shield para AVI
+        tail_prot = 512000;  // 500KB Tail Shield para o Índice (Onde ocorre o vazamento de 1s)
+        if (acao == 1) {
+            snprintf(f_tmp, 1024, "%s_tmp_raw.avi", pi);
+            printf("[⚙️] Gerando Video Bruto (Isso pode demorar e ficar pesado)... "); fflush(stdout);
+            // Comando para gerar o AVI de vídeo e áudio sem compressão (O segredo do chiado cinza)
+            sprintf(cmd, "ffmpeg -i \"%s\" -y -vcodec rawvideo -acodec pcm_s16le -f avi \"%s\" > /dev/null 2>&1", fip, f_tmp);
+            if (system(cmd) != 0) { printf("\n[❌] Erro FFmpeg na conversao Raw AVI.\n"); return; }
+            printf("OK!\n");
+        } else strcpy(f_tmp, fip);
     }
 
     snprintf(fop, 1024, "%s%s", po, no);
@@ -93,9 +101,12 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
         int d; cs[i] = calcular_casa_quiasmo(fr, &d); free(fr);
     }
 
-    FILE *fin = fopen(f_tmp, "rb"), *fout = fopen(fop, "wb");
-    if (!fin || !fout) { if(fin) fclose(fin); free(cs); return; }
+    FILE *fin = fopen(f_tmp, "rb");
+    if (!fin) { free(cs); return; }
     fseek(fin, 0, SEEK_END); long t_size = ftell(fin); rewind(fin);
+
+    FILE *fout = fopen(fop, "wb");
+    if (!fout) { fclose(fin); free(cs); return; }
 
     if (h_size > t_size) h_size = 0;
     if (h_size > 0) {
@@ -111,11 +122,16 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
     long ptr = cs[0];
     unsigned char *buf = malloc(65536);
 
-    printf("[⚙️] Prensando..."); fflush(stdout);
-    clock_t t_ini = clock(); // INÍCIO DO CRONÔMETRO
+    long body_limit = t_size - tail_prot;
+    if (body_limit <= h_size) body_limit = t_size;
 
-    while (!feof(fin)) {
-        size_t r = fread(buf, 1, 65536, fin);
+    printf("[⚙️] Prensando Entropia Retro-Glitch..."); fflush(stdout);
+    clock_t t_ini = clock();
+
+    long cur = h_size;
+    while (cur < body_limit) {
+        size_t to_read = (cur + 65536 > body_limit) ? (body_limit - cur) : 65536;
+        size_t r = fread(buf, 1, to_read, fin);
         if (r <= 0) break;
         for (size_t i = 0; i < r; i++) {
             unsigned char original = buf[i];
@@ -125,16 +141,25 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
                 if (acao == 1) buf[i] = (unsigned char)((buf[i] + (s % 256)) % 256);
                 else buf[i] = (unsigned char)((buf[i] - (s % 256) + 256) % 256);
             }
+            // O SALTO ASSIMÉTRICO QUE GERA O CHIADO CINZA/COLORIDO
             if (acao == 1) ptr += (original == 0) ? 1 : original;
             else ptr += (buf[i] == 0) ? 1 : buf[i];
         }
         fwrite(buf, 1, r, fout);
+        cur += r;
     }
 
-    double t_fim = (double)(clock() - t_ini) / CLOCKS_PER_SEC; // FIM DO CRONÔMETRO
+    // Copia a cauda (vazamento necessário para o AVI abrir)
+    if (cur < t_size) {
+        unsigned char* t_buf = malloc(65536); size_t tr;
+        while((tr = fread(t_buf, 1, 65536, fin)) > 0) fwrite(t_buf, 1, tr, fout);
+        free(t_buf);
+    }
+
+    double t_total = (double)(clock() - t_ini) / CLOCKS_PER_SEC;
 
     fclose(fin); fclose(fout);
-    if ((sub_modo == 2 || sub_modo == 3) && acao == 1) unlink(f_tmp);
+    if ((sub_modo == 2 || sub_modo == 3 || sub_modo == 4) && acao == 1) unlink(f_tmp);
     free(buf); free(cs);
-    printf(" OK! (em %.6fs)\n[✅] Finalizado em: %s\n", t_fim, no);
+    printf(" OK! (em %.6fs)\n[✅] Finalizado em: %s\n", t_total, no);
 }
