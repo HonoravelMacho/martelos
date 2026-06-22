@@ -3,7 +3,7 @@
 #include <sys/types.h>
 
 char* ler_texto_ctrl_d(const char* instrucao) {
-    printf("%s\n(Ctrl+D para finalizar ou digite '0' e Enter para cancelar)\n---\n", instrucao);
+    printf("%s\n(Ctrl+D para finalizar ou '0' para cancelar)\n---\n", instrucao);
     size_t cap = 2048, tam = 0; char* buf = malloc(cap); int c;
     while ((c = getchar()) != EOF) { 
         buf[tam++] = (char)c; 
@@ -15,26 +15,33 @@ char* ler_texto_ctrl_d(const char* instrucao) {
     return buf;
 }
 
-void salvar_em_arquivo(const char* nome, const char* cont) {
-    char path[1024];
-    const char* h = getenv("HOME");
-    
-    // 1. Define o caminho da pasta de textos
-    snprintf(path, 1024, "%s/Downloads/martelos/textos_salvos", h);
-    
-    // 2. Cria a pasta se não existir (Permissão 0755)
-    mkdir(path, 0755);
-    
-    // 3. Define o caminho completo do arquivo
+// Agora aceita um booleano 'is_local' para decidir a jurisdição
+void salvar_em_arquivo_v2(const char* nome, const char* cont, int is_local) {
     char full_path[2048];
-    snprintf(full_path, 2048, "%s/%s", path, nome);
+    
+    if (is_local) {
+        // Modo CLI: Salva na pasta onde o terminal está aberto
+        snprintf(full_path, 2048, "./%s", nome);
+    } else {
+        // Modo Menu: Salva na Bancada de Downloads
+        const char* h = getenv("HOME");
+        char dir_path[1024];
+        snprintf(dir_path, 1024, "%s/Downloads/martelos/textos_salvos", h);
+        mkdir(dir_path, 0755); // Garante que a pasta existe
+        snprintf(full_path, 2048, "%s/%s", dir_path, nome);
+    }
     
     FILE *f = fopen(full_path, "w");
     if (f) {
         fprintf(f, "%s", cont);
         fclose(f);
-        printf("\n[💾] SOBERANIA GARANTIDA! Texto salvo em:\n--> %s\n", full_path);
+        printf("\n[💾] SOBERANIA ALGEBRICA! Salvo em: %s\n", full_path);
     } else {
-        printf("\n[❌] Erro ao salvar arquivo. Verifique as permissoes.\n");
+        printf("\n[❌] Erro ao acessar o caminho: %s\n", full_path);
     }
+}
+
+// Mantendo compatibilidade com a assinatura antiga no .h
+void salvar_em_arquivo(const char* nome, const char* cont) {
+    salvar_em_arquivo_v2(nome, cont, 0); // Default para o menu
 }
