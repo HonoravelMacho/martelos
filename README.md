@@ -71,16 +71,16 @@ e + pi
 
 ## ⚖️ Matrix de Soberania: Martelos vs. Padrões Industriais
 
-O M.A.R.T.E.L.O.S. não busca competir em velocidade de servidor, mas em **resiliência matemática e autonomia**.
+O M.A.R.T.E.L.O.S. não busca competir em velocidade bruta de processamento centralizado, mas sim em **resiliência matemática, privacidade offline e independência de autoridades**.
 
-| Algoritmo | Força Principal | Vantagem do Martelos | Ponto de Atenção |
-| :--- | :--- | :--- | :--- |
-| **AES-256** | Velocidade Hardware | Sem vetores de inicialização fixos | AES é mais rápido para Big Data |
-| **RSA** | Chaves Públicas | Imune a ataques de fatoração simples | Martelos exige troca manual de chaves |
-| **ChaCha20** | Fluxo de Software | Complexidade N-Camadas Dinâmicas | Popularidade mundial |
-| **PGP** | Emails | Transmutação Multimídia (Glitch Art) | Facilidade para usuários leigos |
-| **OTP** | Inquebrável | Chaves curtas geram entropia transcendental | OTP exige chave do tamanho do dado |
-| **Twofish** | Flexibilidade | Zero metadados em arquivos .martelos | Documentação acadêmica vasta |
+| 💻 Algoritmo | ⚡ Foco Principal | 🛡️ Vantagem Martelos | ⚠️ Atenção / Trade-off |
+| :---: | :--- | :--- | :--- |
+| **AES-256** | Criptografia de Bloco / Militar | **Chaves dinâmicas sem vetores fixos** | AES possui aceleração nativa por hardware |
+| **RSA** | Chaves Públicas / Fatoração | **Imunidade a ataques de fatoração simples** | Martelos exige canal seguro de troca manual |
+| **ChaCha20** | Fluxo veloz em software puro | **Complexidade N-Camadas auto-mutáveis** | ChaCha20 possui maior adoção de mercado |
+| **PGP / GPG** | Proteção de E-mails / Assinatura | **Transmutação e Glitch Art nativos** | PGP possui ecossistema de e-mail integrado |
+| **OTP (One-Time)** | Segurança Absoluta ( Shannon ) | **Chaves curtas geram entropia irracional** | OTP exige chaves do mesmo tamanho do dado |
+| **Twofish** | Flexibilidade e Chaveamento | **Zero metadados em modo *.martelos*** | Documentação acadêmica e auditorias massivas |
 
 📜 Licença e Filosofia
 Distribuído sob a Apache Software License 2.0.
