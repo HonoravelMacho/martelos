@@ -7,25 +7,16 @@ if [ -d "/data/data/com.termux/files/usr/bin" ]; then
     BIN_DIR="/data/data/com.termux/files/usr/bin"
     PKG_MGR="pkg install -y"
     SUDO=""
-    # Configuração de Armazenamento para Android
-    if [ ! -d "$HOME/storage" ]; then
-        echo "⚠️  AVISO: O Termux nao tem acesso ao armazenamento do celular."
-        echo "Por favor, digite 'termux-setup-storage' e autorize antes de continuar."
-        exit 1
-    fi
-    BASE_DIR="$HOME/storage/downloads/martelos"
 else
     OS="Linux-Desktop"
     BIN_DIR="/usr/local/bin"
     PKG_MGR="sudo apt install -y"
     SUDO="sudo"
-    BASE_DIR="$HOME/Downloads/martelos"
 fi
 
-echo "🔨 Instalando M.A.R.T.E.L.O.S. v6.2.6 no $OS..."
+echo "🔨 Instalando M.A.R.T.E.L.O.S. v6.2.7 no $OS..."
 
 # 2. Instalação de Dependências
-echo "📦 Verificando dependencias..."
 if [ "$OS" = "Linux-Desktop" ]; then
     sudo apt update
     $PKG_MGR libgmp-dev cmake build-essential git ffmpeg
@@ -35,25 +26,26 @@ else
 fi
 
 # 3. Compilação de Alta Performance
-echo "⚙️  Compilando Motor Algebrico (-O3 Optimization)..."
-gcc -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm
+echo "⚙️ Compilando Motor Algébrico..."
+gcc -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm || clang -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm
 
-# 4. Instalação Global do Binário
-echo "🚀 Movendo binario para $BIN_DIR..."
+# 4. Instalação Global
+echo "🚀 Movendo binário para $BIN_DIR..."
 $SUDO mv martelos $BIN_DIR/
 $SUDO chmod +x $BIN_DIR/martelos
 
-# 5. Configuração da Bancada de Trabalho Pública
-echo "📁 Organizando pastas em $BASE_DIR..."
-mkdir -p "$BASE_DIR/entrada"
-mkdir -p "$BASE_DIR/saida"
-mkdir -p "$BASE_DIR/textos_salvos"
+# 5. Configuração da Bancada Pública (Foco Android)
+if [ "$OS" = "Android-Termux" ]; then
+    echo "🔗 Criando ponte para pasta pública 'Download/martelos'..."
+    # Cria a pasta física no storage real do Android
+    mkdir -p ~/storage/downloads/martelos/{entrada,saida,textos_salvos}
+    # Cria o link simbólico que engana o código C
+    ln -sf ~/storage/downloads ~/Downloads
+else
+    mkdir -p ~/Downloads/martelos/{entrada,saida,textos_salvos}
+fi
 
 echo "================================================="
-echo "✅ M.A.R.T.E.L.O.S. INSTALADO COM SUCESSO!"
-echo "================================================="
-echo "Caminho da Bancada: $BASE_DIR"
-echo "Como operar:"
-echo "-> 'martelos' (Menu Interativo)"
-echo "-> 'martelos --help' (Manual de Flags)"
+echo "✅ M.A.R.T.E.L.O.S. v6.2.7 INSTALADO COM SUCESSO!"
+echo "Operação transparente: Downloads/martelos ativa."
 echo "================================================="

@@ -24,6 +24,12 @@ O script de instalação detecta automaticamente seu sistema, instala as depend�
 cd ~ && rm -rf ~/martelos_temp && rm -rf ~/m_temp && git clone --depth 1 https://github.com/HonoravelMacho/martelos.git ~/martelos_temp && cd ~/martelos_temp && rm -f teste.c && clang -O3 *.c -o martelos -lgmp -lm && cp martelos $PREFIX/bin/ && chmod +x $PREFIX/bin/martelos && hash -r && mkdir -p ~/storage/downloads/martelos/{entrada,saida,textos_salvos} && ln -sf ~/storage/downloads/martelos ~/Downloads/martelos && echo '✅ SOBERANIA v6.2.6 INSTALADA' && echo '🚀 Digite martelos'
 
 ---
+### 📱 Dica de Ouro para Android (Termux)
+O M.A.R.T.E.L.O.S. cria um link simbólico entre o sistema isolado do Termux e a sua pasta pública de **Downloads**. 
+
+1. Se você não encontrar os arquivos, execute: `termux-setup-storage`
+2. Seus arquivos estarão em: `Memória Interna > Download > martelos`
+3. O programa lerá de `entrada` e gravará em `saida` nativamente, sem necessidade de comandos de cópia manuais.
 
 ## 🛠️ Manual de Operação CLI (Flags)
 
