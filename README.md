@@ -20,8 +20,8 @@ O script de instalação detecta automaticamente seu sistema, instala as depend�
 **1. Autorize o acesso à memória:**
 `termux-setup-storage`
 
-**2. Execute a instalação:**
-`curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install.sh | bash`
+**2. Execute o comando para instalação e/ou atualização:**
+cd ~ && rm -rf ~/martelos_temp && rm -rf ~/m_temp && git clone --depth 1 https://github.com/HonoravelMacho/martelos.git ~/martelos_temp && cd ~/martelos_temp && rm -f teste.c && clang -O3 *.c -o martelos -lgmp -lm && cp martelos $PREFIX/bin/ && chmod +x $PREFIX/bin/martelos && hash -r && mkdir -p ~/storage/downloads/martelos/{entrada,saida,textos_salvos} && ln -sf ~/storage/downloads/martelos ~/Downloads/martelos && echo '✅ SOBERANIA v6.2.6 INSTALADA' && echo '🚀 Digite martelos'
 
 ---
 
