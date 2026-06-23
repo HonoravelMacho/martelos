@@ -72,7 +72,7 @@ O Martelos aceita expressões complexas. Exemplos:
       <th align="center">💻 Algoritmo</th>
       <th align="left">⚡ Foco Principal</th>
       <th align="left">🛡️ Vantagem Martelos</th>
-      <th align="left">⚠️ Trade-off</th>
+      <th align="left">⚠️  Desvantagem do Martelos</th>
     </tr>
   </thead>
   <tbody>
