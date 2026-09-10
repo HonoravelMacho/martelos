@@ -45,6 +45,15 @@ else
     mkdir -p ~/Downloads/martelos/{entrada,saida,textos_salvos}
 fi
 
+# 6. Ícone e tipo MIME dos arquivos .martelos (2 martelos cruzados)
+echo "🎨 Registrando ícone dos arquivos .martelos..."
+$SUDO cp martelos-mime.xml /usr/share/mime/packages/martelos.xml
+$SUDO mkdir -p /usr/share/icons/hicolor/scalable/mimetypes /usr/share/icons/hicolor/48x48/mimetypes
+$SUDO cp martelos-icon.svg /usr/share/icons/hicolor/scalable/mimetypes/application-x-martelos.svg
+$SUDO cp martelos-icon-48.png /usr/share/icons/hicolor/48x48/mimetypes/application-x-martelos.png
+$SUDO update-mime-database /usr/share/mime
+$SUDO gtk-update-icon-cache -f /usr/share/icons/hicolor > /dev/null 2>&1 || true
+
 echo "================================================="
 echo "✅ M.A.R.T.E.L.O.S. v6.2.7 INSTALADO COM SUCESSO!"
 echo "Operação transparente: Downloads/martelos ativa."

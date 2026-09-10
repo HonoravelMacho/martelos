@@ -9,6 +9,7 @@
 #include <gmp.h>
 
 #define MODULO 34
+#define MART_MAXEXT 32
 extern const char ALFABETO[MODULO];
 
 // Funções de Texto e Alfabeto
@@ -39,5 +40,6 @@ char* decifrar_texto_n_camadas(const char* t, long* cs, int n, int tipo, const c
 void processar_binario_core(const char* fip, const char* fop, int acao, int sub_modo, int tipo_const, const char* formula, long* cs, int nf);
 void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int sub_modo);
 void executar_transmutacao_cli(const char* fip, const char* fop, int acao, int sub_modo, int tipo_const, const char* formula, long* cs, int nf);
+int ler_ext_martelos_arquivo(const char* path, char* ext_out);
 
 #endif

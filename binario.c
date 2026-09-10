@@ -29,6 +29,12 @@ int is_audio(const char* ext) {
     return 0;
 }
 
+int is_video(const char* ext) {
+    char* list[] = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".flv", ".wmv", ".mpg", ".mpeg", ".m4v", ".3gp", ".ogv", ".ts", ".vob", ".asf"};
+    for(int i=0; i<15; i++) if(ext && strcasecmp(ext, list[i]) == 0) return 1;
+    return 0;
+}
+
 // --- MARTELOS: helpers exclusivos do caminho de ÁUDIO (não tocar imagem/vídeo/texto) ---
 static const char* obter_extensao(const char* nome) {
     if (!nome) return NULL;
@@ -66,6 +72,7 @@ static int validar_entrada_audio(const char* fip) {
     if (!is_audio(ext)) {
         printf("[❌] Formato de áudio não suportado ('%s'). Aceitos: .mp3 .wav .flac .ogg .m4a .aac .wma\n",
                ext ? ext : "(sem extensão)");
+        printf("    Dica: escolha a opção correta no menu (1-Martelos 2-Imagens 3-Audios 4-Videos).\n");
         return 0;
     }
     // ffprobe confirma que existe ao menos um stream de áudio decodificável
@@ -80,6 +87,161 @@ static int validar_entrada_audio(const char* fip) {
     return 1;
 }
 
+// Retorna 1 se o arquivo pode ser tratado como vídeo, 0 caso contrário (com mensagem).
+static int validar_entrada_video(const char* fip) {
+    const char* ext = obter_extensao(fip);
+    if (!is_video(ext)) {
+        printf("[❌] Formato de vídeo não suportado ('%s'). Aceitos: .mp4 .avi .mkv .mov .webm .flv .wmv .mpg .mpeg .m4v .3gp .ogv .ts .vob .asf\n",
+               ext ? ext : "(sem extensão)");
+        printf("    Dica: escolha a opção correta no menu (1-Martelos 2-Imagens 3-Audios 4-Videos).\n");
+        return 0;
+    }
+    // ffprobe confirma que existe ao menos um stream de vídeo decodificável
+    char cmd[4096];
+    snprintf(cmd, sizeof(cmd),
+             "ffprobe -v error -select_streams v -show_entries stream=codec_name "
+             "-of default=noprint_wrappers=1:nokey=1 \"%s\" > /dev/null 2>&1", fip);
+    if (system(cmd) != 0) {
+        printf("[❌] Arquivo não contém vídeo válido ou o ffmpeg não consegue lê-lo: %s\n", fip);
+        return 0;
+    }
+    return 1;
+}
+
+// Retorna 1 se o arquivo pode ser tratado como imagem, 0 caso contrário (com mensagem).
+static int validar_entrada_imagem(const char* fip) {
+    const char* ext = obter_extensao(fip);
+    if (!is_image(ext)) {
+        printf("[❌] Formato de imagem não suportado ('%s'). Aceitos: .jpg .jpeg .png .webp .bmp .gif .tiff\n",
+               ext ? ext : "(sem extensão)");
+        printf("    Dica: escolha a opção correta no menu (1-Martelos 2-Imagens 3-Audios 4-Videos).\n");
+        return 0;
+    }
+    // ffprobe confirma que o arquivo abre como imagem (imagem = 1 stream de "vídeo")
+    char cmd[4096];
+    snprintf(cmd, sizeof(cmd),
+             "ffprobe -v error -select_streams v -show_entries stream=codec_name "
+             "-of default=noprint_wrappers=1:nokey=1 \"%s\" > /dev/null 2>&1", fip);
+    if (system(cmd) != 0) {
+        printf("[❌] Arquivo não contém imagem válida ou o ffmpeg não consegue lê-lo: %s\n", fip);
+        return 0;
+    }
+    return 1;
+}
+
+typedef struct { long ini, fim; } Fatia;
+
+// Mapeia os payloads de frames de um AVI (LIST movi): devolve as faixas de
+// bytes que PODEM ser criptografadas. Preserva hdrl, cabeçalho da LIST movi,
+// cabeçalho de 8 bytes de cada chunk e o índice idx1 do final.
+// Retorna o nº de fatias em *out (0 = falha → o chamador usa o caminho legado).
+static int mapear_payloads_avi(const char* path, Fatia** out) {
+    *out = NULL;
+    FILE* f = fopen(path, "rb");
+    if (!f) return 0;
+    fseek(f, 0, SEEK_END); long total = ftell(f); rewind(f);
+    unsigned char h[12];
+    if (total < 12 || fread(h, 1, 12, f) != 12 || memcmp(h, "RIFF", 4) != 0 || memcmp(h + 8, "AVI ", 4) != 0) { fclose(f); return 0; }
+    long off = 12, movi_off = -1; unsigned long movi_sz = 0;
+    for (int it = 0; it < 64; it++) {
+        if (off + 12 > total) break;
+        unsigned char ch[12];
+        fseek(f, off, SEEK_SET);
+        if (fread(ch, 1, 12, f) != 12) break;
+        unsigned long sz = (unsigned long)ch[4] | ((unsigned long)ch[5] << 8) |
+                           ((unsigned long)ch[6] << 16) | ((unsigned long)ch[7] << 24);
+        if (sz > (unsigned long)(total - off)) break;
+        if (memcmp(ch, "LIST", 4) == 0 && memcmp(ch + 8, "movi", 4) == 0) { movi_off = off; movi_sz = sz; break; }
+        off += 8 + (long)sz + (sz & 1);
+    }
+    if (movi_off < 0) { fclose(f); return 0; }
+    long cur = movi_off + 12, fim = movi_off + 8 + (long)movi_sz;
+    if (fim > total) fim = total;
+    int cap = 256, n = 0;
+    Fatia* v = malloc(cap * sizeof(Fatia));
+    if (!v) { fclose(f); return 0; }
+    int ok = 1;
+    while (cur + 8 <= fim) {
+        unsigned char ch[8];
+        fseek(f, cur, SEEK_SET);
+        if (fread(ch, 1, 8, f) != 8) { ok = 0; break; }
+        unsigned long sz = (unsigned long)ch[4] | ((unsigned long)ch[5] << 8) |
+                           ((unsigned long)ch[6] << 16) | ((unsigned long)ch[7] << 24);
+        long pay_ini = cur + 8, pay_fim = pay_ini + (long)sz;
+        if (pay_fim > fim) { ok = 0; break; } // tamanho incoerente: desiste (fallback legado)
+        if (sz > 0) {
+            if (n >= cap) { cap *= 2; Fatia* nv = realloc(v, cap * sizeof(Fatia)); if (!nv) { ok = 0; break; } v = nv; }
+            v[n].ini = pay_ini; v[n].fim = pay_fim; n++;
+        }
+        cur = pay_fim + (sz & 1);
+    }
+    fclose(f);
+    if (!ok || n == 0) { free(v); return 0; }
+    *out = v; return n;
+}
+
+// Desenha a barra "progresso" (tty: reescreve a linha; sem tty: 1 linha a cada 10%).
+static void atualizar_barra(int eh_tty, double pct, long feito, long total, double decorrido,
+                            long* last_pct4, clock_t* last_draw, clock_t agora, int* last_fatia) {
+    long pct4 = (long)(pct * 10000.0);
+    if (pct4 == *last_pct4 && (agora - *last_draw) <= CLOCKS_PER_SEC / 5) return;
+    *last_pct4 = pct4; *last_draw = agora;
+    int blocos = (int)(pct * 20.0 / 100.0); if (blocos > 20) blocos = 20;
+    char barra[21];
+    for (int b = 0; b < 20; b++) barra[b] = (b < blocos) ? '#' : '-';
+    barra[20] = '\0';
+    double restante = (feito > 0 && decorrido > 0) ? decorrido * (total - feito) / (double)feito : 0.0;
+    char t_rest[16];
+    if (restante >= 7200.0) snprintf(t_rest, sizeof t_rest, "~%.2fh", restante / 3600.0);
+    else if (restante >= 120.0) snprintf(t_rest, sizeof t_rest, "~%.1fmin", restante / 60.0);
+    else snprintf(t_rest, sizeof t_rest, "~%.0fs", restante);
+    if (eh_tty) {
+        printf("\r\033[Kprogresso %8.4f%% [%s] %.1f/%.1fMB %s",
+               pct, barra, feito / 1048576.0, total / 1048576.0, t_rest);
+        fflush(stdout);
+    } else {
+        int fatia = (int)(pct / 10.0);
+        if (fatia != *last_fatia) {
+            *last_fatia = fatia;
+            printf("progresso %8.4f%% [%s] %.1f/%.1fMB %s\n",
+                   pct, barra, feito / 1048576.0, total / 1048576.0, t_rest);
+            fflush(stdout);
+        }
+    }
+}
+
+static int iniciar_barra(void) {
+    int tty = isatty(fileno(stdout));
+    if (tty) { printf("progresso   0.0000%% [--------------------]"); fflush(stdout); }
+    else printf("progresso   0.0000%% [--------------------]\n");
+    return tty;
+}
+
+// Verificador do cabeçalho .martelos (só metadados: detecta senha/constante
+// diferente na descriptografia; não altera a criptografia em nada).
+static unsigned long martelos_verificador(long* cs, int nf, int tipo_const, const char* formula) {
+    unsigned long v = (unsigned long)tipo_const * 2654435761UL + 0x9E3779B9UL * (unsigned long)nf;
+    for (int i = 0; i < nf; i++) v = v * 31 + (unsigned long)(cs[i] & 0xffffffffL);
+    if (formula) for (const char* q = formula; *q; q++) v = v * 31 + (unsigned char)*q;
+    return v & 0xffffffffUL; // cabeçalho guarda 32 bits: máscara aqui para a comparação bater
+}
+
+// Lê só a extensão guardada no cabeçalho .martelos (1 = achou). Arquivos
+// antigos (sem cabeçalho) retornam 0 e usam o caminho legado.
+int ler_ext_martelos_arquivo(const char* path, char* ext_out) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return 0;
+    fseek(f, 0, SEEK_END); long total = ftell(f); rewind(f);
+    unsigned char cab[9];
+    size_t lr = fread(cab, 1, 9, f);
+    int ok = 0;
+    if (lr == 9 && memcmp(cab, "MART", 4) == 0 && cab[8] <= MART_MAXEXT && cab[8] > 0 && 9L + cab[8] <= total) {
+        if (fread((unsigned char*)ext_out, 1, cab[8], f) == cab[8]) { ext_out[cab[8]] = '\0'; ok = 1; }
+    }
+    fclose(f);
+    return ok;
+}
+
 // O MOTOR DE PRENSAGEM v2.7 (O Chiado Original)
 void processar_binario_core(const char* fip, const char* fop, int acao, int sub_modo, int tipo_const, const char* formula, long* cs, int nf) {
     char cmd[4096], f_tmp[2048];
@@ -88,6 +250,7 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
 
     if (acao == 1) {
         if (sub_modo == 2) { // Imagens -> BMP Raw
+            if (!validar_entrada_imagem(fip)) { free(cs); return; }
             snprintf(f_tmp, 2048, "%s_prensa.bmp", fip); h_size = 54;
             sprintf(cmd, "ffmpeg -i \"%s\" -y -pix_fmt bgr24 \"%s\" > /dev/null 2>&1", fip, f_tmp);
             if (system(cmd) != 0) { printf("[❌] Erro FFmpeg.\n"); return; }
@@ -98,6 +261,7 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
             if (system(cmd) != 0) { printf("[❌] Erro FFmpeg: não foi possível converter '%s' para WAV.\n", fip); free(cs); return; }
             h_size = detectar_header_wav(f_tmp);
         } else if (sub_modo == 4) { // Vídeo -> AVI RAW (CHIADO CINZA)
+            if (!validar_entrada_video(fip)) { free(cs); return; }
             snprintf(f_tmp, 2048, "%s_prensa.avi", fip); h_size = 10240; t_size_prot = 512000;
             sprintf(cmd, "ffmpeg -i \"%s\" -y -vcodec rawvideo -acodec pcm_s16le -f avi \"%s\" > /dev/null 2>&1", fip, f_tmp);
             if (system(cmd) != 0) { printf("[❌] Erro FFmpeg.\n"); return; }
@@ -124,6 +288,173 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         fclose(fin); fclose(fout); free(cs); return;
     }
 
+    // Descriptografia: confere se a entrada parece um glitch gerado pelo martelos.
+    // Evita "descriptografar" o arquivo ORIGINAL por engano e gerar lixo silencioso.
+    if (acao == 2 && sub_modo >= 2) {
+        unsigned char mg[12];
+        size_t lm = fread(mg, 1, 12, fin); rewind(fin);
+        int okm = 0;
+        if (lm >= 12) {
+            if (sub_modo == 2) okm = (mg[0] == 'B' && mg[1] == 'M');
+            else if (sub_modo == 3) okm = (memcmp(mg, "RIFF", 4) == 0 && memcmp(mg + 8, "WAVE", 4) == 0);
+            else if (sub_modo == 4) okm = (memcmp(mg, "RIFF", 4) == 0 && memcmp(mg + 8, "AVI ", 4) == 0);
+        }
+        if (!okm) {
+            const char* esperado = (sub_modo == 2) ? ".bmp de chiado (*_glitch.bmp)"
+                : (sub_modo == 3) ? ".wav de chiado (*_glitch.wav)" : ".avi de chiado (*_glitch.avi)";
+            printf("[❌] '%s' não parece um glitch gerado pelo martelos.\n", f_tmp);
+            printf("    Para descriptografar, escolha o arquivo %s — não o arquivo original.\n", esperado);
+            fclose(fin); fclose(fout); unlink(fop); free(cs); return;
+        }
+    }
+
+    char* est = obter_esteira_numerica(tipo_const, formula, 2000000);
+    long tam_e = strlen(est), ptr = cs[0];
+    unsigned char *buf = malloc(65536);
+    clock_t t_i = clock();
+
+    // Vídeo: mapeia os payloads de frames do AVI (preserva hdrl/cabeçalhos/idx1
+    // e criptografa TODOS os frames, inclusive os últimos — sem cauda em claro).
+    Fatia* fatias = NULL; int nfat = 0;
+    if (sub_modo == 4) nfat = mapear_payloads_avi(f_tmp, &fatias);
+
+    if (sub_modo == 1) {
+        // .martelos com cabeçalho: "MART" + ver[4] + tam_ext[1] + ext + payload.
+        // Arquivos antigos (sem cabeçalho) usam o modo legado: criptografa tudo.
+        if (acao == 1) {
+            const char* e = strrchr(fip, '.');
+            const char* barra = strrchr(fip, '/');
+            char ext_m[MART_MAXEXT + 1] = "";
+            if (e && (!barra || e > barra) && strlen(e) <= MART_MAXEXT) strcpy(ext_m, e);
+            unsigned long vv = martelos_verificador(cs, nf, tipo_const, formula);
+            unsigned char cab[9];
+            memcpy(cab, "MART", 4);
+            cab[4] = (unsigned char)(vv & 0xFF); cab[5] = (unsigned char)((vv >> 8) & 0xFF);
+            cab[6] = (unsigned char)((vv >> 16) & 0xFF); cab[7] = (unsigned char)((vv >> 24) & 0xFF);
+            cab[8] = (unsigned char)strlen(ext_m);
+            fwrite(cab, 1, 9, fout);
+            if (ext_m[0]) fwrite(ext_m, 1, strlen(ext_m), fout);
+            printf("[📦] Extensão '%s' guardada no .martelos (volta sozinha na descriptografia).\n",
+                   ext_m[0] ? ext_m : "(nenhuma)");
+        } else {
+            unsigned char cab[9];
+            size_t lr = fread(cab, 1, 9, fin);
+            if (lr == 9 && memcmp(cab, "MART", 4) == 0 && cab[8] <= MART_MAXEXT && 9L + cab[8] <= total_size) {
+                long base_pay = 9L + cab[8];
+                if (cab[8] > 0) {
+                    char tmp[MART_MAXEXT + 1];
+                    if (fread(tmp, 1, cab[8], fin) != cab[8]) { rewind(fin); base_pay = 0; }
+                }
+                if (base_pay > 0) {
+                    unsigned long vv = martelos_verificador(cs, nf, tipo_const, formula);
+                    unsigned long vl = (unsigned long)cab[4] | ((unsigned long)cab[5] << 8) |
+                                       ((unsigned long)cab[6] << 16) | ((unsigned long)cab[7] << 24);
+                    if (vl != vv)
+                        printf("[⚠️] Aviso: frases/constante parecem diferentes das usadas na criptografia.\n");
+                } else rewind(fin);
+            } else rewind(fin); // legado: sem cabeçalho, descriptografa tudo
+        }
+        long base_pay = ftell(fin);
+        long total_pay = total_size - base_pay;
+        int eh_tty = iniciar_barra();
+        long last_pct4 = -1; clock_t last_draw = 0; int last_fatia = -1;
+        while (ftell(fin) < total_size) {
+            size_t want = (size_t)(total_size - ftell(fin)); if (want > 65536) want = 65536;
+            size_t r = fread(buf, 1, want, fin);
+            if (r == 0) break;
+            for (size_t i = 0; i < r; i++) {
+                unsigned char original = buf[i];
+                for (int j = 0; j < nf; j++) {
+                    long p = (ptr + cs[j]) % tam_e;
+                    int s = (est[p]-'0')*100 + (est[(p+1)%tam_e]-'0')*10 + (est[(p+2)%tam_e]-'0');
+                    if (acao == 1) buf[i] = (unsigned char)((buf[i] + (s % 256)) % 256);
+                    else buf[i] = (unsigned char)((buf[i] - (s % 256) + 256) % 256);
+                }
+                if (acao == 1) ptr += (original == 0) ? 1 : original;
+                else ptr += (buf[i] == 0) ? 1 : buf[i];
+            }
+            fwrite(buf, 1, r, fout);
+            if (total_pay > 0) {
+                long feito = ftell(fin) - base_pay;
+                if (feito < 0) feito = 0; if (feito > total_pay) feito = total_pay;
+                atualizar_barra(eh_tty, feito * 100.0 / (double)total_pay, feito, total_pay,
+                                (double)(clock() - t_i) / CLOCKS_PER_SEC,
+                                &last_pct4, &last_draw, clock(), &last_fatia);
+            }
+        }
+        if (total_pay > 0) printf("\n");
+    } else if (sub_modo == 4 && nfat > 0) {
+        long total_cript = 0;
+        for (int k = 0; k < nfat; k++) total_cript += fatias[k].fim - fatias[k].ini;
+        long last_pct4 = -1;
+        clock_t last_draw = 0;
+        int eh_tty = isatty(fileno(stdout));
+        int last_fatia = -1;
+        if (eh_tty) { printf("progresso   0.0000%% [--------------------]"); fflush(stdout); }
+        else printf("progresso   0.0000%% [--------------------]\n");
+        long feito = 0, pos = 0; int k = 0;
+        while (pos < total_size) {
+            while (k < nfat && pos >= fatias[k].fim) k++;
+            int em_pay = (k < nfat && pos >= fatias[k].ini);
+            long limite = em_pay ? fatias[k].fim : (k < nfat ? fatias[k].ini : total_size);
+            if (limite <= pos) { if (em_pay) k++; else break; continue; }
+            size_t want = (size_t)(limite - pos); if (want > 65536) want = 65536;
+            size_t r = fread(buf, 1, want, fin);
+            if (r == 0) break;
+            if (em_pay) {
+                for (size_t i = 0; i < r; i++) {
+                    unsigned char original = buf[i];
+                    for (int j = 0; j < nf; j++) {
+                        long p = (ptr + cs[j]) % tam_e;
+                        int s = (est[p]-'0')*100 + (est[(p+1)%tam_e]-'0')*10 + (est[(p+2)%tam_e]-'0');
+                        if (acao == 1) buf[i] = (unsigned char)((buf[i] + (s % 256)) % 256);
+                        else buf[i] = (unsigned char)((buf[i] - (s % 256) + 256) % 256);
+                    }
+                    if (acao == 1) ptr += (original == 0) ? 1 : original;
+                    else ptr += (buf[i] == 0) ? 1 : buf[i];
+                }
+                feito += (long)r;
+                if (total_cript > 0) {
+                    double pct = feito * 100.0 / (double)total_cript;
+                    long pct4 = (long)(pct * 10000.0);
+                    clock_t agora = clock();
+                    double decorrido = (double)(agora - t_i) / CLOCKS_PER_SEC;
+                    if (pct4 != last_pct4 || (agora - last_draw) > CLOCKS_PER_SEC / 5) {
+                        last_pct4 = pct4; last_draw = agora;
+                        int blocos = (int)(pct * 20.0 / 100.0);
+                        if (blocos > 20) blocos = 20;
+                        char barra[21];
+                        for (int b = 0; b < 20; b++) barra[b] = (b < blocos) ? '#' : '-';
+                        barra[20] = '\0';
+                        double restante = (feito > 0 && decorrido > 0)
+                            ? decorrido * (total_cript - feito) / (double)feito : 0.0;
+                        char t_rest[16];
+                        if (restante >= 7200.0) snprintf(t_rest, sizeof t_rest, "~%.2fh", restante / 3600.0);
+                        else if (restante >= 120.0) snprintf(t_rest, sizeof t_rest, "~%.1fmin", restante / 60.0);
+                        else snprintf(t_rest, sizeof t_rest, "~%.0fs", restante);
+                        if (eh_tty) {
+                            printf("\r\033[Kprogresso %8.4f%% [%s] %.1f/%.1fMB %s",
+                                   pct, barra, feito / 1048576.0, total_cript / 1048576.0,
+                                   t_rest);
+                            fflush(stdout);
+                        } else {
+                            int fatia = (int)(pct / 10.0);
+                            if (fatia != last_fatia) {
+                                last_fatia = fatia;
+                                printf("progresso %8.4f%% [%s] %.1f/%.1fMB %s\n",
+                                       pct, barra, feito / 1048576.0, total_cript / 1048576.0,
+                                       t_rest);
+                                fflush(stdout);
+                            }
+                        }
+                    }
+                }
+            }
+            fwrite(buf, 1, r, fout);
+            pos += (long)r;
+        }
+        if (total_cript > 0) printf("\n");
+    } else {
     if (h_size > total_size) h_size = 0;
     if (h_size > 0) {
         unsigned char* h_buf = malloc(h_size);
@@ -131,13 +462,9 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         free(h_buf);
     }
 
-    char* est = obter_esteira_numerica(tipo_const, formula, 2000000);
-    long tam_e = strlen(est), ptr = cs[0];
-    unsigned char *buf = malloc(65536);
     long body_limit = total_size - t_size_prot;
     if (body_limit <= h_size) body_limit = total_size;
 
-    clock_t t_i = clock();
     long total_body = body_limit - h_size;
     if (total_body < 0) total_body = 0;
     long last_pct4 = -1;
@@ -215,10 +542,11 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         while((tr = fread(t_buf, 1, 65536, fin)) > 0) fwrite(t_buf, 1, tr, fout);
         free(t_buf);
     }
+    } // fim do caminho legado (imagem/audio/generico/fallback de video)
 
     fclose(fin); fclose(fout);
     if (acao == 1 && sub_modo >= 2) unlink(f_tmp);
-    free(buf); free(cs);
+    free(buf); free(cs); free(fatias);
     printf(" OK! (%.4fs)\n[✅] Finalizado em: %s\n", (double)(clock()-t_i)/CLOCKS_PER_SEC, fop);
 }
 
@@ -242,9 +570,15 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
         else if (sub_modo == 3) sprintf(no, "%s_glitch.wav", base);
         else sprintf(no, "%s_glitch.avi", base);
     } else {
-        if (sub_modo == 1) { 
-            printf("Extensao original (ex: .pdf): "); IGNORE_RET(scanf("%255s", no)); 
-            char f_no[350]; sprintf(f_no, "%s_restaurado%s", base, no); strcpy(no, f_no); 
+        if (sub_modo == 1) {
+            char ext_auto[MART_MAXEXT + 1];
+            if (acao == 2 && ler_ext_martelos_arquivo(fip, ext_auto)) {
+                sprintf(no, "%s_restaurado%s", base, ext_auto);
+                printf("Extensão detectada no arquivo: %s (sem precisar digitar)\n", ext_auto);
+            } else {
+                printf("Extensao original (ex: .pdf): "); IGNORE_RET(scanf("%255s", no));
+                char f_no[350]; sprintf(f_no, "%s_restaurado%s", base, no); strcpy(no, f_no);
+            }
         }
         else if (sub_modo == 2) sprintf(no, "%s_fix.bmp", base);
         else if (sub_modo == 3) sprintf(no, "%s_fix.wav", base);

@@ -76,6 +76,19 @@ void processar_flags(int argc, char** argv) {
         else if (strcmp(argv[i], "-save") == 0) salvar = 1;
     }
 
+    if (alvo == 5 && acao == 2) {
+        // Descriptografia .martelos: usa a extensão guardada no cabeçalho
+        // (ex: teste.martelos -> teste.avi). Sem cabeçalho, mantém o nome legado.
+        char ext_auto[MART_MAXEXT + 1];
+        if (ler_ext_martelos_arquivo(entrada, ext_auto)) {
+            char base_cli[1024]; strcpy(base_cli, entrada);
+            size_t le = strlen(base_cli);
+            if (le > 9 && strcmp(base_cli + le - 9, ".martelos") == 0) base_cli[le - 9] = '\0';
+            size_t lb = strlen(base_cli), lx = strlen(ext_auto);
+            if (lb >= lx && strcmp(base_cli + lb - lx, ext_auto) == 0) snprintf(fop, 1024, "%s", base_cli);
+            else snprintf(fop, 1024, "%s%s", base_cli, ext_auto);
+        }
+    }
     if (alvo == 1 && chaves && acao > 0) {
         char* res = (acao == 1) ? cifrar_texto_n_camadas(entrada, chaves, n_layers, tipo_const, formula) : decifrar_texto_n_camadas(entrada, chaves, n_layers, tipo_const, formula);
         printf("\n--- RESULTADO CLI ---\n[%s]\n", res);

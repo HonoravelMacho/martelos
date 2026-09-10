@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Tipo MIME dos arquivos criptografados pelo M.A.R.T.E.L.O.S. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-martelos">
+    <comment>Arquivo martelado (M.A.R.T.E.L.O.S.)</comment>
+    <comment xml:lang="pt_BR">Arquivo martelado (M.A.R.T.E.L.O.S.)</comment>
+    <glob pattern="*.martelos"/>
+    <icon name="application-x-martelos"/>
+  </mime-type>
+</mime-info>
