@@ -29,6 +29,57 @@ int is_audio(const char* ext) {
     return 0;
 }
 
+// --- MARTELOS: helpers exclusivos do caminho de ÁUDIO (não tocar imagem/vídeo/texto) ---
+static const char* obter_extensao(const char* nome) {
+    if (!nome) return NULL;
+    const char* p = strrchr(nome, '.');
+    return p;
+}
+
+// Varre os chunks do RIFF/WAVE e devolve o offset onde começam as amostras PCM
+// (ou seja, o tamanho do cabeçalho a preservar). Fallback: 44.
+static long detectar_header_wav(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return 44;
+    unsigned char hdr[12];
+    if (fread(hdr, 1, 12, f) != 12) { fclose(f); return 44; }
+    if (memcmp(hdr, "RIFF", 4) != 0 || memcmp(hdr + 8, "WAVE", 4) != 0) { fclose(f); return 44; }
+    long off = 12;
+    for (int iter = 0; iter < 64; iter++) {
+        unsigned char ch[8];
+        if (fseek(f, off, SEEK_SET) != 0) break;
+        if (fread(ch, 1, 8, f) != 8) break;
+        unsigned long sz = (unsigned long)ch[4] | ((unsigned long)ch[5] << 8) |
+                           ((unsigned long)ch[6] << 16) | ((unsigned long)ch[7] << 24);
+        if (memcmp(ch, "data", 4) == 0) { fclose(f); return off + 8; }
+        if (sz > 100000000UL) break; // chunk absurdo = arquivo estranho, desiste
+        off += 8 + (long)sz + (sz & 1);
+        if (off > 10240) break; // cabeçalho WAV nunca é gigante
+    }
+    fclose(f);
+    return 44;
+}
+
+// Retorna 1 se o arquivo pode ser tratado como áudio, 0 caso contrário (com mensagem).
+static int validar_entrada_audio(const char* fip) {
+    const char* ext = obter_extensao(fip);
+    if (!is_audio(ext)) {
+        printf("[❌] Formato de áudio não suportado ('%s'). Aceitos: .mp3 .wav .flac .ogg .m4a .aac .wma\n",
+               ext ? ext : "(sem extensão)");
+        return 0;
+    }
+    // ffprobe confirma que existe ao menos um stream de áudio decodificável
+    char cmd[4096];
+    snprintf(cmd, sizeof(cmd),
+             "ffprobe -v error -select_streams a -show_entries stream=codec_name "
+             "-of default=noprint_wrappers=1:nokey=1 \"%s\" > /dev/null 2>&1", fip);
+    if (system(cmd) != 0) {
+        printf("[❌] Arquivo não contém áudio válido ou o ffmpeg não consegue lê-lo: %s\n", fip);
+        return 0;
+    }
+    return 1;
+}
+
 // O MOTOR DE PRENSAGEM v2.7 (O Chiado Original)
 void processar_binario_core(const char* fip, const char* fop, int acao, int sub_modo, int tipo_const, const char* formula, long* cs, int nf) {
     char cmd[4096], f_tmp[2048];
@@ -40,10 +91,12 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
             snprintf(f_tmp, 2048, "%s_prensa.bmp", fip); h_size = 54;
             sprintf(cmd, "ffmpeg -i \"%s\" -y -pix_fmt bgr24 \"%s\" > /dev/null 2>&1", fip, f_tmp);
             if (system(cmd) != 0) { printf("[❌] Erro FFmpeg.\n"); return; }
-        } else if (sub_modo == 3) { // Áudio -> WAV PCM
-            snprintf(f_tmp, 2048, "%s_prensa.wav", fip); h_size = 44;
-            sprintf(cmd, "ffmpeg -i \"%s\" -y -acodec pcm_s16le -ar 44100 \"%s\" > /dev/null 2>&1", fip, f_tmp);
-            if (system(cmd) != 0) { printf("[❌] Erro FFmpeg.\n"); return; }
+        } else if (sub_modo == 3) { // Áudio -> WAV PCM (header detectado, não fixo)
+            if (!validar_entrada_audio(fip)) { free(cs); return; }
+            snprintf(f_tmp, 2048, "%s_prensa.wav", fip);
+            sprintf(cmd, "ffmpeg -i \"%s\" -y -vn -acodec pcm_s16le -ar 44100 \"%s\" > /dev/null 2>&1", fip, f_tmp);
+            if (system(cmd) != 0) { printf("[❌] Erro FFmpeg: não foi possível converter '%s' para WAV.\n", fip); free(cs); return; }
+            h_size = detectar_header_wav(f_tmp);
         } else if (sub_modo == 4) { // Vídeo -> AVI RAW (CHIADO CINZA)
             snprintf(f_tmp, 2048, "%s_prensa.avi", fip); h_size = 10240; t_size_prot = 512000;
             sprintf(cmd, "ffmpeg -i \"%s\" -y -vcodec rawvideo -acodec pcm_s16le -f avi \"%s\" > /dev/null 2>&1", fip, f_tmp);
@@ -51,13 +104,25 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         }
     } else {
         if (sub_modo == 2) h_size = 54;
-        else if (sub_modo == 3) h_size = 44;
+        else if (sub_modo == 3) h_size = detectar_header_wav(f_tmp); // f_tmp == fip aqui
         else if (sub_modo == 4) { h_size = 10240; t_size_prot = 512000; }
     }
 
     FILE *fin = fopen(f_tmp, "rb"), *fout = fopen(fop, "wb");
-    if (!fin || !fout) { if(fin) fclose(fin); free(cs); return; }
+    if (!fin || !fout) {
+        if (!fin) {
+            printf("[❌] Não encontrei o arquivo de entrada: %s\n", f_tmp);
+            printf("    Dica: no modo por números o arquivo precisa estar em ~/Downloads/martelos/entrada/\n");
+            if (fout) { fclose(fout); unlink(fop); } // não deixa .wav de 0 bytes para trás
+        }
+        else { fclose(fin); printf("[❌] Não consegui criar o arquivo de saída: %s\n", fop); }
+        free(cs); return;
+    }
     fseek(fin, 0, SEEK_END); long total_size = ftell(fin); rewind(fin);
+    if (total_size <= 0) {
+        printf("[❌] Arquivo de entrada vazio (0 bytes): %s\n", f_tmp);
+        fclose(fin); fclose(fout); free(cs); return;
+    }
 
     if (h_size > total_size) h_size = 0;
     if (h_size > 0) {
@@ -73,7 +138,17 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
     if (body_limit <= h_size) body_limit = total_size;
 
     clock_t t_i = clock();
-    printf("[⚙️] Prensando..."); fflush(stdout);
+    long total_body = body_limit - h_size;
+    if (total_body < 0) total_body = 0;
+    long last_pct4 = -1;
+    clock_t last_draw = 0;
+    // Barra horizontal em UMA linha via ANSI (zero dependências externas):
+    // \r volta ao início + \033[K apaga a linha (evita "empilhar" na vertical).
+    // Sem tty (saída redirecionada), imprime uma linha a cada 10% em vez de \r.
+    int eh_tty = isatty(fileno(stdout));
+    int last_fatia = -1;
+    if (eh_tty) { printf("progresso   0.0000%% [--------------------]"); fflush(stdout); }
+    else printf("progresso   0.0000%% [--------------------]\n");
 
     while (ftell(fin) < body_limit) {
         size_t to_read = (ftell(fin) + 65536 > body_limit) ? (body_limit - ftell(fin)) : 65536;
@@ -92,7 +167,48 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
             else ptr += (buf[i] == 0) ? 1 : buf[i];
         }
         fwrite(buf, 1, r, fout);
+
+        if (total_body > 0) {
+            long done = ftell(fin) - h_size;
+            if (done < 0) done = 0;
+            if (done > total_body) done = total_body;
+            double pct = done * 100.0 / (double)total_body;
+            long pct4 = (long)(pct * 10000.0);
+            clock_t agora = clock();
+            double decorrido = (double)(agora - t_i) / CLOCKS_PER_SEC;
+            if (pct4 != last_pct4 || (agora - last_draw) > CLOCKS_PER_SEC / 5) {
+                last_pct4 = pct4; last_draw = agora;
+                int blocos = (int)(pct * 20.0 / 100.0);
+                if (blocos > 20) blocos = 20;
+                char barra[21];
+                for (int b = 0; b < 20; b++) barra[b] = (b < blocos) ? '#' : '-';
+                barra[20] = '\0';
+                double restante = (done > 0 && decorrido > 0)
+                    ? decorrido * (total_body - done) / (double)done : 0.0;
+                // Tempo restante compacto: ~45s, ~3.2min ou ~2.50h (linha curta p/ caber no terminal)
+                char t_rest[16];
+                if (restante >= 7200.0) snprintf(t_rest, sizeof t_rest, "~%.2fh", restante / 3600.0);
+                else if (restante >= 120.0) snprintf(t_rest, sizeof t_rest, "~%.1fmin", restante / 60.0);
+                else snprintf(t_rest, sizeof t_rest, "~%.0fs", restante);
+                if (eh_tty) {
+                    printf("\r\033[Kprogresso %8.4f%% [%s] %.1f/%.1fMB %s",
+                           pct, barra, done / 1048576.0, total_body / 1048576.0,
+                           t_rest);
+                    fflush(stdout);
+                } else {
+                    int fatia = (int)(pct / 10.0);
+                    if (fatia != last_fatia) {
+                        last_fatia = fatia;
+                        printf("progresso %8.4f%% [%s] %.1f/%.1fMB %s\n",
+                               pct, barra, done / 1048576.0, total_body / 1048576.0,
+                               t_rest);
+                        fflush(stdout);
+                    }
+                }
+            }
+        }
     }
+    if (total_body > 0) printf("\n");
 
     if (ftell(fin) < total_size) {
         unsigned char* t_buf = malloc(65536); size_t tr;
@@ -146,5 +262,10 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
 }
 
 void executar_transmutacao_cli(const char* fip, const char* fop, int acao, int sub_modo, int tipo_const, const char* formula, long* cs, int nf) {
-    processar_binario_core(fip, fop, acao, sub_modo, tipo_const, formula, cs, nf);
+    // O core assume a posse do vetor e dá free ao final; aqui duplicamos para
+    // que o chamador (processar_flags) continue dono do original e não haja double-free.
+    long* copia = malloc(nf * sizeof(long));
+    if (!copia) return;
+    memcpy(copia, cs, nf * sizeof(long));
+    processar_binario_core(fip, fop, acao, sub_modo, tipo_const, formula, copia, nf);
 }

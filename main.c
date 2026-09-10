@@ -82,7 +82,8 @@ void processar_flags(int argc, char** argv) {
         if (salvar) salvar_em_arquivo_v2("cli_output.txt", res, 1);
         free(res);
     } else if (alvo >= 2 && acao > 0 && chaves) {
-        executar_transmutacao_cli(entrada, fop, acao, alvo-1, tipo_const, formula, chaves, n_layers);
+        int sub_modo_cli = (alvo == 5) ? 1 : alvo; // 2=img 3=audio 4=video 5=generico(1)
+        executar_transmutacao_cli(entrada, fop, acao, sub_modo_cli, tipo_const, formula, chaves, n_layers);
     } else {
         printf("\n[❌ ERRO] Parametros invalidos. Consulte: ./martelos --help\n");
     }
