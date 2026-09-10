@@ -553,6 +553,10 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
 void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int sub_modo) {
     char ni[256], no[300], fip[1024], fop[1024];
     const char* h = getenv("HOME");
+#ifdef _WIN32
+    if (!h) h = getenv("USERPROFILE");
+#endif
+    if (!h) h = ".";
     char pi[512], po[512];
     snprintf(pi, 512, "%s/Downloads/martelos/entrada/", h);
     snprintf(po, 512, "%s/Downloads/martelos/saida/", h);

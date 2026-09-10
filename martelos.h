@@ -7,6 +7,9 @@
 #include <ctype.h>
 #include <time.h>
 #include <gmp.h>
+#ifdef _WIN32
+#include <strings.h>
+#endif
 
 #define MODULO 34
 #define MART_MAXEXT 32

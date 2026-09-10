@@ -1,6 +1,9 @@
 #include "martelos.h"
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <io.h>
+#endif
 
 char* ler_texto_ctrl_d(const char* instrucao) {
     printf("%s\n(Ctrl+D para finalizar ou '0' para cancelar)\n---\n", instrucao);
@@ -25,9 +28,17 @@ void salvar_em_arquivo_v2(const char* nome, const char* cont, int is_local) {
     } else {
         // Modo Menu: Salva na Bancada de Downloads
         const char* h = getenv("HOME");
+#ifdef _WIN32
+        if (!h) h = getenv("USERPROFILE");
+#endif
+        if (!h) h = ".";
         char dir_path[1024];
         snprintf(dir_path, 1024, "%s/Downloads/martelos/textos_salvos", h);
+#ifdef _WIN32
+        mkdir(dir_path);
+#else
         mkdir(dir_path, 0755); // Garante que a pasta existe
+#endif
         snprintf(full_path, 2048, "%s/%s", dir_path, nome);
     }
     

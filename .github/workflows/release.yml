@@ -1,0 +1,283 @@
+# Release do M.A.R.T.E.L.O.S.: compila para cada plataforma e publica os pacotes.
+# Gatilho: push de tag no formato v* (ex: v6.3.0). Também roda manual
+# (workflow_dispatch) só para gerar artefatos, sem publicar Release.
+name: Release Martelos
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GMP_VER: "6.3.0"
+
+jobs:
+  prep:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VER="${GITHUB_REF#refs/tags/v}"
+          else
+            VER="0.0.0-dev"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+  deb:
+    needs: [prep]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prep.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias
+        run: sudo apt-get update && sudo apt-get install -y libgmp-dev cmake build-essential
+      - name: Compilar (Release, -O3)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
+      - name: Teste de fumaca
+        run: ./build/martelos -c -s "#OK#" -k 1 "#S#" -f pi -print
+      - name: Montar pacote .deb
+        run: |
+          mkdir -p pkg/DEBIAN pkg/usr/local/bin pkg/usr/share/doc/martelos
+          cp build/martelos pkg/usr/local/bin/
+          cp README.md LICENSE pkg/usr/share/doc/martelos/
+          cat > pkg/DEBIAN/control <<EOF
+          Package: martelos
+          Version: ${VERSION}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Depends: libgmp10, ffmpeg
+          Maintainer: M.A.R.T.E.L.O.S. <martelos@noreply>
+          Description: Motor Algebrico Ruptivo Transformacional Experimental
+           Engine de criptografia em C com N senhas e constantes irracionais.
+          EOF
+          dpkg-deb --build pkg "martelos_${VERSION}_amd64.deb"
+          dpkg-deb -c "martelos_${VERSION}_amd64.deb"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-deb
+          path: "martelos_${{ env.VERSION }}_amd64.deb"
+
+  rpm:
+    needs: [prep]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prep.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias
+        run: sudo apt-get update && sudo apt-get install -y rpm gcc libgmp-dev make
+      - name: Montar pacote .rpm
+        run: |
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          tar czf ~/rpmbuild/SOURCES/martelos-${VERSION}.tar.gz \
+            --transform "s,^,martelos-${VERSION}/," \
+            main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c \
+            martelos.h CMakeLists.txt README.md LICENSE
+          cat > ~/rpmbuild/SPECS/martelos.spec <<EOF
+          Name: martelos
+          Version: ${VERSION}
+          Release: 1
+          Summary: Motor Algebrico Ruptivo Transformacional Experimental
+          License: Apache-2.0
+          Source0: martelos-%{version}.tar.gz
+          BuildRequires: gcc make
+
+          %description
+          Engine de criptografia em C com N senhas e constantes irracionais.
+
+          %prep
+          %setup -q
+
+          %build
+          gcc -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm
+
+          %install
+          mkdir -p %{buildroot}/usr/local/bin
+          install -m0755 martelos %{buildroot}/usr/local/bin/martelos
+
+          %files
+          /usr/local/bin/martelos
+          %doc README.md LICENSE
+          EOF
+          rpmbuild -bb ~/rpmbuild/SPECS/martelos.spec
+          cp ~/rpmbuild/RPMS/x86_64/martelos-${VERSION}-1.x86_64.rpm .
+          rpm -qip martelos-${VERSION}-1.x86_64.rpm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-rpm
+          path: "martelos-${{ env.VERSION }}-1.x86_64.rpm"
+
+  windows-exe:
+    needs: [prep]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prep.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias MinGW
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64 m4 curl
+      - name: Cache GMP/MinGW
+        uses: actions/cache@v4
+        with:
+          path: ~/gmp-mingw
+          key: gmp-${{ env.GMP_VER }}-mingw
+      - name: Compilar GMP estatico (MinGW)
+        run: |
+          if [ ! -f "$HOME/gmp-mingw/lib/libgmp.a" ]; then
+            bash packaging/build-gmp-mingw.sh "$HOME/gmp-mingw"
+          fi
+      - name: Compilar martelos.exe (-O3)
+        run: |
+          x86_64-w64-mingw32-gcc -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c \
+            -I"$HOME/gmp-mingw/include" "$HOME/gmp-mingw/lib/libgmp.a" \
+            -o "martelos-${VERSION}-windows-x86_64.exe" -lm
+          file "martelos-${VERSION}-windows-x86_64.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-exe
+          path: "martelos-${{ env.VERSION }}-windows-x86_64.exe"
+
+  linux-static:
+    needs: [prep]
+    runs-on: ubuntu-latest
+    container: alpine:latest
+    env:
+      VERSION: ${{ needs.prep.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias (musl)
+        run: apk add --no-cache build-base curl m4
+      - name: Compilar GMP estatico (musl)
+        run: |
+          curl -sSL "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VER}.tar.xz" -o /tmp/gmp.tar.xz
+          mkdir -p /tmp/gmp && tar xf /tmp/gmp.tar.xz -C /tmp/gmp
+          cd /tmp/gmp/gmp-${GMP_VER}
+          ./configure --disable-shared --enable-static --prefix=/tmp/gmp-root
+          make -j"$(nproc)" && make install
+      - name: Compilar binario estatico
+        run: |
+          gcc -O2 -static main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c \
+            -I/tmp/gmp-root/include /tmp/gmp-root/lib/libgmp.a -o martelos -lm
+          file martelos | grep -q "statically linked"
+          ./martelos -c -s "#OK#" -k 1 "#S#" -f pi -print
+      - name: Empacotar .tar.gz
+        run: |
+          mkdir -p stage && cp martelos README.md LICENSE stage/
+          tar czf "martelos-${VERSION}-linux-x86_64-static.tar.gz" -C stage martelos README.md LICENSE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-static
+          path: "martelos-${{ env.VERSION }}-linux-x86_64-static.tar.gz"
+
+  android:
+    needs: [prep]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prep.outputs.version }}
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      NDK_VER: "27.0.12077973"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Cache Android SDK/NDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/android-sdk
+          key: android-sdk-34-ndk-27
+      - name: Instalar SDK + NDK
+        run: |
+          cd "${GITHUB_WORKSPACE}"
+          curl -sSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o cmdtools.zip
+          mkdir -p android-sdk/cmdline-tools
+          unzip -q cmdtools.zip -d android-sdk/cmdline-tools
+          mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;${NDK_VER}"
+      - name: Cache GMP/Android
+        uses: actions/cache@v4
+        with:
+          path: ~/gmp-android
+          key: gmp-${{ env.GMP_VER }}-android-arm64-ndk27
+      - name: Compilar GMP estatico (Android ARM64)
+        run: |
+          if [ ! -f "$HOME/gmp-android/lib/libgmp.a" ]; then
+            bash packaging/build-gmp-android.sh "$ANDROID_HOME/ndk/${NDK_VER}" 24 "$HOME/gmp-android"
+          fi
+      - name: Binario estatico ARM64 (Termux)
+        run: |
+          TC="$ANDROID_HOME/ndk/${NDK_VER}/toolchains/llvm/prebuilt/linux-x86_64"
+          "$TC/bin/aarch64-linux-android24-clang" -O2 -static \
+            main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c \
+            -I"$HOME/gmp-android/include" "$HOME/gmp-android/lib/libgmp.a" \
+            -o martelos-android-arm64 -lm
+          file martelos-android-arm64
+          mkdir -p stage && cp martelos-android-arm64 README.md LICENSE stage/
+          tar czf "martelos-${VERSION}-android-arm64.tar.gz" -C stage martelos-android-arm64 README.md LICENSE
+      - name: Montar APK companheiro
+        run: |
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          AJAR="$ANDROID_HOME/platforms/android-34/android.jar"
+          sed -i "s/android:versionName=\"[^\"]*\"/android:versionName=\"$VERSION\"/" packaging/android/AndroidManifest.xml
+          sed -i "s/android:versionCode=\"[^\"]*\"/android:versionCode=\"$GITHUB_RUN_NUMBER\"/" packaging/android/AndroidManifest.xml
+          sed -i "s/#define MARTELOS_VERSION \"[^\"]*\"/#define MARTELOS_VERSION \"$VERSION\"/" packaging/android/jni/martelos_jni.c
+          mkdir -p apk/classes apk/dex apk/lib/arm64-v8a
+          TC="$ANDROID_HOME/ndk/${NDK_VER}/toolchains/llvm/prebuilt/linux-x86_64"
+          "$TC/bin/aarch64-linux-android24-clang" -O2 -shared -fPIC \
+            packaging/android/jni/martelos_jni.c -o apk/lib/arm64-v8a/libmartelos.so
+          "$BT/aapt2" link -o apk/app-unsigned.apk -I "$AJAR" \
+            --manifest packaging/android/AndroidManifest.xml \
+            --min-sdk-version 24 --target-sdk-version 34
+          javac -source 11 -target 11 -cp "$AJAR" -d apk/classes \
+            packaging/android/java/com/martelos/CompanionActivity.java
+          "$BT/d8" --lib "$AJAR" --min-api 24 --output apk/dex $(find apk/classes -name "*.class")
+          cp apk/dex/classes.dex apk/
+          cd apk && zip -uj app-unsigned.apk classes.dex && zip -0 -r app-unsigned.apk lib && cd ..
+          "$BT/zipalign" -f 4 apk/app-unsigned.apk "martelos-${VERSION}-android.apk"
+          keytool -genkeypair -keystore debug.keystore -alias androiddebugkey \
+            -storepass android -keypass android -keyalg RSA -validity 10950 \
+            -dname "CN=Android Debug" -noprompt
+          "$BT/apksigner" sign --ks debug.keystore --ks-pass:android \
+            --out "martelos-${VERSION}-android-signed.apk" "martelos-${VERSION}-android.apk"
+          mv "martelos-${VERSION}-android-signed.apk" "martelos-${VERSION}-android.apk"
+          "$BT/apksigner" verify --print-certs "martelos-${VERSION}-android.apk"
+          "$BT/aapt" dump badging "martelos-${VERSION}-android.apk" | head -n 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-android
+          path: |
+            martelos-${{ env.VERSION }}-android-arm64.tar.gz
+            martelos-${{ env.VERSION }}-android.apk
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [prep, deb, rpm, windows-exe, linux-static, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            Pacotes do M.A.R.T.E.L.O.S. **${{ needs.prep.outputs.version }}**.
+            Notas: o `.exe` cobre arquivos de ate 2 GB; o `.apk` e o app companheiro
+            (motor completo no Android via Termux + tarball ARM64); midia exige
+            `ffmpeg` instalado no sistema.
