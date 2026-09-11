@@ -7,7 +7,7 @@
 
 void listar_arquivos_entrada(char* cam) {
     DIR *d = opendir(cam);
-    printf("\n--- BANCADA DE ENTRADA (%s) ---\n", cam);
+    printf("\n--- PASTA ATUAL ---\n");
     struct dirent *dir;
     if (d) {
         int found = 0;
@@ -276,7 +276,7 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
     if (!fin || !fout) {
         if (!fin) {
             printf("[❌] Não encontrei o arquivo de entrada: %s\n", f_tmp);
-            printf("    Dica: no modo por números o arquivo precisa estar em ~/Downloads/martelos/entrada/\n");
+            printf("    Dica: no modo por números, o arquivo precisa estar na pasta onde o terminal foi aberto.\n");
             if (fout) { fclose(fout); unlink(fop); } // não deixa .wav de 0 bytes para trás
         }
         else { fclose(fin); printf("[❌] Não consegui criar o arquivo de saída: %s\n", fop); }
@@ -552,18 +552,11 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
 
 void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int sub_modo) {
     char ni[256], no[300], fip[1024], fop[1024];
-    const char* h = getenv("HOME");
-#ifdef _WIN32
-    if (!h) h = getenv("USERPROFILE");
-#endif
-    if (!h) h = ".";
-    char pi[512], po[512];
-    snprintf(pi, 512, "%s/Downloads/martelos/entrada/", h);
-    snprintf(po, 512, "%s/Downloads/martelos/saida/", h);
-    
-    listar_arquivos_entrada(pi);
-    printf("\nArquivo: "); IGNORE_RET(scanf("%255s", ni)); if (strcmp(ni, "0") == 0) return;
-    snprintf(fip, 1024, "%s%s", pi, ni);
+
+    // Opera na pasta onde o terminal foi aberto (nada de bancada fixa).
+    listar_arquivos_entrada(".");
+    printf("\nArquivo (na pasta atual): "); IGNORE_RET(scanf("%255s", ni)); if (strcmp(ni, "0") == 0) return;
+    snprintf(fip, 1024, "%s", ni);
 
     char *ext_ptr = strrchr(ni, '.');
     char base[256]; strcpy(base, ni); if(ext_ptr) base[ext_ptr - ni] = '\0';
@@ -589,7 +582,22 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
         else sprintf(no, "%s_fix.avi", base);
     }
 
-    snprintf(fop, 1024, "%s%s", po, no);
+    snprintf(fop, 1024, "%s", no);
+    if (acao == 1) {
+        // Nome personalizado do arquivo criptografado (Enter = mantém o padrão).
+        const char* dext = (sub_modo == 1) ? ".martelos" : (sub_modo == 2) ? ".bmp" : (sub_modo == 3) ? ".wav" : ".avi";
+        printf("Nome do arquivo criptografado [Enter = %s]: ", no);
+        int c; while ((c = getchar()) != '\n' && c != EOF); // limpa o resto da linha anterior
+        char custom[320];
+        if (fgets(custom, sizeof custom, stdin)) {
+            custom[strcspn(custom, "\n")] = 0;
+            if (custom[0] != '\0') {
+                if (strrchr(custom, '.') == NULL) snprintf(no, 300, "%s%s", custom, dext);
+                else snprintf(no, 300, "%s", custom);
+                snprintf(fop, 1024, "%s", no);
+            }
+        }
+    }
     printf("Camadas? "); int nf; IGNORE_RET(scanf("%d", &nf)); if (nf <= 0) nf = 1; getchar();
     long* cs = malloc(nf * sizeof(long));
     for (int i=0; i<nf; i++) { 

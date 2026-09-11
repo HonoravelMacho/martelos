@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Install Dependencies
       run: sudo apt-get update && sudo apt-get install -y libgmp-dev cmake build-essential
@@ -23,7 +23,7 @@ jobs:
       run: cd build && make
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: martelos-linux-x86_64
         path: build/martelos

@@ -26,6 +26,7 @@ void exibir_documentacao_flags() {
     printf("\n   -k [n] \"#ch#\"     Qtd de camadas e as frases entre #");
     printf("\n   -f [const]        pi, catalan, apery, clausen, arctan, log3");
     printf("\n   -save / -print    Salvar .txt ou apenas exibir (para -s)");
+    printf("\n   -o [nome]         Nome do arquivo de saida (padrao: *_glitch.*)");
     printf("\n\n EXEMPLO:");
     printf("\n   ./martelos -c -s \"#Ataque#\" -k 1 \"#Senha#\" -f pi -print");
     printf("\n===================================================================\n");
@@ -49,6 +50,7 @@ void processar_flags(int argc, char** argv) {
     int acao = 0, alvo = 0, tipo_const = 1;
     char entrada[1024] = "", formula[1024] = "", fop[1024] = "";
     int n_layers = 0; long* chaves = NULL; int salvar = 0;
+    char saida_custom[1024] = ""; int tem_saida_custom = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-c") == 0) acao = 1;
@@ -74,9 +76,11 @@ void processar_flags(int argc, char** argv) {
             }
         }
         else if (strcmp(argv[i], "-save") == 0) salvar = 1;
+        else if (strcmp(argv[i], "-o") == 0) { i++; if(i < argc) { snprintf(saida_custom, 1024, "%s", argv[i]); tem_saida_custom = 1; } }
     }
 
-    if (alvo == 5 && acao == 2) {
+    if (tem_saida_custom) snprintf(fop, 1024, "%s", saida_custom); // vale em qualquer ordem das flags
+    if (alvo == 5 && acao == 2 && !tem_saida_custom) {
         // Descriptografia .martelos: usa a extensão guardada no cabeçalho
         // (ex: teste.martelos -> teste.avi). Sem cabeçalho, mantém o nome legado.
         char ext_auto[MART_MAXEXT + 1];

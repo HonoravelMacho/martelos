@@ -16,20 +16,39 @@ O script de instalação detecta automaticamente seu sistema, instala as depend�
 ### 🐧 Linux (Ubuntu/Debian/Pop_OS)
 `curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install.sh | bash`
 
-### 📱 Android (Termux)
-**1. Autorize o acesso à memória:**
-`termux-setup-storage`
+### 📱 Android (Termux) — 3 caminhos, do mais fácil ao manual
 
-**2. Execute o comando para instalação e/ou atualização:**
-cd ~ && rm -rf ~/martelos_temp && rm -rf ~/m_temp && git clone --depth 1 https://github.com/HonoravelMacho/martelos.git ~/martelos_temp && cd ~/martelos_temp && rm -f teste.c && clang -O3 *.c -o martelos -lgmp -lm && cp martelos $PREFIX/bin/ && chmod +x $PREFIX/bin/martelos && hash -r && mkdir -p ~/storage/downloads/martelos/{entrada,saida,textos_salvos} && ln -sf ~/storage/downloads/martelos ~/Downloads/martelos && echo '✅ SOBERANIA v6.2.6 INSTALADA' && echo '🚀 Digite martelos'
+**Caminho 1 — Script oficial (recomendado):**
+```bash
+curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install-termux.sh | bash
+```
+
+**Caminho 2 — Binário pronto (sem compilar):**
+Baixe o `martelos-*-android-arm64.tar.gz` na [página de Releases](https://github.com/HonoravelMacho/martelos/releases), extraia no Termux e mova para o PATH:
+```bash
+tar xzf martelos-*-android-arm64.tar.gz
+cp martelos $PREFIX/bin/ && chmod +x $PREFIX/bin/martelos
+```
+
+**Caminho 3 — Manual:**
+```bash
+termux-setup-storage
+pkg update && pkg install -y clang gmp ffmpeg git
+git clone --depth 1 https://github.com/HonoravelMacho/martelos.git ~/martelos_temp
+cd ~/martelos_temp
+clang -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm
+cp martelos $PREFIX/bin/ && chmod +x $PREFIX/bin/martelos
+```
+
+**Pré-requisito (só na 1ª vez):** autorize o acesso à memória com `termux-setup-storage`.
 
 ---
 ### 📱 Dica de Ouro para Android (Termux)
-O M.A.R.T.E.L.O.S. cria um link simbólico entre o sistema isolado do Termux e a sua pasta pública de **Downloads**. 
+O modo por números do M.A.R.T.E.L.O.S. opera **na pasta onde o terminal foi aberto** — entre na pasta dos seus arquivos com `cd` antes de digitar `martelos`. Exemplo com a pasta pública de Downloads:
 
 1. Se você não encontrar os arquivos, execute: `termux-setup-storage`
-2. Seus arquivos estarão em: `Memória Interna > Download > martelos`
-3. O programa lerá de `entrada` e gravará em `saida` nativamente, sem necessidade de comandos de cópia manuais.
+2. Navegue até eles: `cd ~/storage/downloads`
+3. Rode `martelos` ali — cripto e descripto nascem na mesma pasta, sem cópia manual.
 
 ## 🛠️ Manual de Operação CLI (Flags)
 
@@ -44,6 +63,9 @@ No modo CLI (Flags), os arquivos são processados na pasta local `./` onde o ter
 | `-i` | Alvo: **Imagem** (Transmuta para .bmp) |
 | `-a` | Alvo: **Áudio** (Transmuta para .wav) |
 | `-v` | Alvo: **Vídeo** (Transmuta para AVI Raw - Chiado v2.7) |
+| `-m` | Alvo: **Qualquer arquivo** (gera `.martelos` com extensão guardada) |
+| `-o` | **Saída**: Nome do arquivo gerado (padrão: `*_glitch.*`) |
+| `-save` | Salvar resultado de texto em `.txt` |
 | `-k` | **Chaves**: Informe a Qtd e as frases entre "#...#" |
 | `-f` | **Fórmula**: Constante (pi, catalan, etc) ou fórmula customizada |
 
@@ -67,6 +89,19 @@ O Martelos aceita expressões complexas. Exemplos:
 * `sin(pi/2) + log(3)`
 * `pi^2 / 6`
 * `e + pi`
+
+## 📦 Pacotes Prontos (Releases)
+
+Cada tag `v*` gera automaticamente na [página de Releases](https://github.com/HonoravelMacho/martelos/releases):
+
+| Arquivo | Plataforma |
+| :--- | :--- |
+| `.deb` | Debian/Ubuntu (`sudo dpkg -i martelos_*.deb`) |
+| `.rpm` | Fedora/RHEL/openSUSE (`sudo rpm -i martelos-*.rpm`) |
+| `.exe` | Windows (requer `ffmpeg` no PATH para mídia) |
+| `-android-arm64.tar.gz` | Termux (ver Caminho 2 acima) |
+| `-linux-x86_64-static.tar.gz` | Linux genérico, sem dependências |
+| `.apk` | App companheiro Android (motor completo via Termux) |
 
 ---
 
