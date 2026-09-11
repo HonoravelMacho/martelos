@@ -18,10 +18,11 @@ O script de instalação detecta automaticamente seu sistema, instala as depend�
 
 ### 📱 Android (Termux) — 3 caminhos, do mais fácil ao manual
 
-**Caminho 1 — Script oficial (recomendado):**
+**Caminho 1 — Script oficial (instala OU atualiza, com validação):**
 ```bash
 curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install-termux.sh | bash
 ```
+Um comando só: baixa a versão mais recente do GitHub, compila, testa o motor, instala no `$PREFIX/bin` e valida que `martelos` funciona em qualquer pasta. Pode rodar de novo quando sair versão nova.
 
 **Caminho 2 — Binário pronto (sem compilar):**
 Baixe o `martelos-*-android-arm64.tar.gz` na [página de Releases](https://github.com/HonoravelMacho/martelos/releases), extraia no Termux e mova para o PATH:
