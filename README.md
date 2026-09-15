@@ -2,7 +2,7 @@
 **Motor Algébrico Ruptivo Transformacional Experimental Livre e Open Source**
 
 ![Status](https://img.shields.io/badge/Status-Estável-green)
-![Versão](https://img.shields.io/badge/Versão-v6.3.2-blue)
+![Versão](https://img.shields.io/badge/Versão-v6.3.3-blue)
 ![Licença](https://img.shields.io/badge/Licença-Apache%202.0-yellow)
 
 M.A.R.T.E.L.O.S. é um manifesto técnico pela **Soberania Algébrica**. Em um mundo de vigilância constante, o projeto foca em segurança **Off-Grid**, autonomia total e na entropia pura extraída de constantes transcendentais do universo.
@@ -40,7 +40,7 @@ cd ~/martelos_temp
 clang -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm
 cp martelos $PREFIX/bin/ && chmod +x $PREFIX/bin/martelos
 ```
-> **Nota v6.3.2 (Termux):** o pacote correto é `libgmp` (o antigo `gmp` não existe e quebrava a instalação). O `ffprobe` já vem junto com o pacote `ffmpeg`. Se a mídia falhar, rode `ffmpeg -version` e `ffprobe -version` para conferir; o martelos agora mostra o log real do ffmpeg em vez de um erro genérico.
+> **Nota v6.3.3 (Termux):** o pacote correto é `libgmp` (o antigo `gmp` não existe e quebrava a instalação). O `ffprobe` já vem junto com o pacote `ffmpeg`. Se a mídia falhar, rode `ffmpeg -version` e `ffprobe -version` para conferir; o martelos agora mostra o log real do ffmpeg em vez de um erro genérico. O log usa `$TMPDIR` (`$PREFIX/tmp` no Termux) porque o `/tmp` do Android não tem escrita.
 
 **Pré-requisito (só na 1ª vez):** autorize o acesso à memória com `termux-setup-storage`.
 

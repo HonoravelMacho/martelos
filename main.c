@@ -5,12 +5,12 @@
 void lb() { int c; while ((c = getchar()) != '\n' && c != EOF); }
 
 void banner() { 
-    printf("\n===================================================================\n                   🔨 Projeto M.A.R.T.E.L.O.S.  \n   \"Motor Algébrico Ruptivo Transformacional Experimental\"\n              \"Livre e Open Source\" (v6.3.2)\n===================================================================\n"); 
+    printf("\n===================================================================\n                   🔨 Projeto M.A.R.T.E.L.O.S.  \n   \"Motor Algébrico Ruptivo Transformacional Experimental\"\n              \"Livre e Open Source\" (v6.3.3)\n===================================================================\n"); 
 }
 
 void exibir_documentacao_flags() {
     printf("\n===================================================================");
-    printf("\n                  📖 MANUAL DE OPERACAO CLI (v6.3.2)");
+    printf("\n                  📖 MANUAL DE OPERACAO CLI (v6.3.3)");
     printf("\n===================================================================");
     printf("\n SINTAXE: ./martelos [acao] [alvo] [arquivo/texto] [parametros]");
     printf("\n\n OPERACOES:");

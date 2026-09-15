@@ -14,10 +14,10 @@ else
     SUDO="sudo"
 fi
 
-echo "🔨 Instalando M.A.R.T.E.L.O.S. v6.3.2 no $OS..."
+echo "🔨 Instalando M.A.R.T.E.L.O.S. v6.3.3 no $OS..."
 
 # 2. Instalação de Dependências
-# CORREÇÃO v6.3.2: no Termux o pacote é "libgmp" (não "gmp") e o ffprobe
+# CORREÇÃO v6.3.3: no Termux o pacote é "libgmp" (não "gmp") e o ffprobe
 # acompanha o pacote "ffmpeg". Sem isso o instalador quebrava no Android.
 if [ "$OS" = "Linux-Desktop" ]; then
     sudo apt update
@@ -64,6 +64,6 @@ echo "ℹ️ Termux: registro de ícone/MIME ignorado (sem /usr/share no Android
 fi
 
 echo "================================================="
-echo "✅ M.A.R.T.E.L.O.S. v6.3.2 INSTALADO COM SUCESSO!"
+echo "✅ M.A.R.T.E.L.O.S. v6.3.3 INSTALADO COM SUCESSO!"
 echo "Operação transparente: Downloads/martelos ativa."
 echo "================================================="

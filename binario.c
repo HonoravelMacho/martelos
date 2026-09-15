@@ -64,29 +64,60 @@ static void dica_ffmpeg_instalacao(void) {
 
 // Roda o ffmpeg guardando o stderr num log temporário. Em caso de falha,
 // exibe as últimas linhas do log em vez do genérico "Erro FFmpeg".
+// CORREÇÃO v6.3.3: o log NÃO pode ser fixo em /tmp — no Android/Termux o /tmp
+// não existe ou não tem escrita ("Permission denied"), o que fazia o próprio
+// shell falhar (código 256) antes mesmo do ffmpeg rodar. Agora o diretório
+// vem de $TMPDIR (Termux: $PREFIX/tmp), com fallback para $PREFIX/tmp e /tmp,
+// e com teste de escrita antes de usar.
 // Retorna o código do system() (0 = ok).
+static void caminho_log_ffmpeg(char* out, size_t n) {
+    const char* td = getenv("TMPDIR");
+    char base[1024];
+    if (td && *td) snprintf(base, sizeof base, "%s", td);
+    else {
+        const char* px = getenv("PREFIX"); // Termux: /data/data/com.termux/files/usr
+        if (px && *px) snprintf(base, sizeof base, "%s/tmp", px);
+        else snprintf(base, sizeof base, "/tmp");
+    }
+    snprintf(out, n, "%s/martelos_ffmpeg_%d.log", base, (int)getpid());
+}
+
 static int rodar_ffmpeg(const char* cmd_sem_log, const char* rotulo) {
-    char log[256];
-    snprintf(log, sizeof log, "/tmp/martelos_ffmpeg_%d.log", (int)getpid());
+    char log[1100];
+    caminho_log_ffmpeg(log, sizeof log);
+    // Testa se dá para escrever o log; se não der, roda sem log em vez de
+    // quebrar o shell com redirecionamento impossível.
+    int tem_log = 0;
+    {
+        FILE* t = fopen(log, "w");
+        if (t) { fclose(t); tem_log = 1; }
+    }
     char full[8192];
-    snprintf(full, sizeof full, "%s > /dev/null 2> \"%s\"", cmd_sem_log, log);
+    if (tem_log) snprintf(full, sizeof full, "%s > /dev/null 2> \"%s\"", cmd_sem_log, log);
+    else snprintf(full, sizeof full, "%s > /dev/null 2>&1", cmd_sem_log);
     int rc = system(full);
     if (rc != 0) {
         printf("[❌] Erro FFmpeg (%s, código %d).\n", rotulo, rc);
-        FILE* lf = fopen(log, "r");
-        if (lf) {
-            char linha[512]; int n = 0;
-            printf("---- log do ffmpeg ----\n");
-            while (fgets(linha, sizeof linha, lf) && n < 15) { printf("%s", linha); n++; }
-            if (n == 0) printf("(log vazio)\n");
-            printf("-----------------------\n");
-            fclose(lf);
+        if (tem_log) {
+            FILE* lf = fopen(log, "r");
+            if (lf) {
+                char linha[512]; int n = 0;
+                printf("---- log do ffmpeg ----\n");
+                while (fgets(linha, sizeof linha, lf) && n < 15) { printf("%s", linha); n++; }
+                if (n == 0) printf("(log vazio)\n");
+                printf("-----------------------\n");
+                fclose(lf);
+            } else {
+                printf("(não foi possível ler o log em %s)\n", log);
+            }
+            unlink(log);
         } else {
-            printf("(não foi possível ler o log em %s)\n", log);
+            printf("(log do ffmpeg indisponível: sem escrita em %s)\n", log);
         }
         dica_ffmpeg_instalacao();
+    } else if (tem_log) {
+        unlink(log);
     }
-    unlink(log);
     return rc;
 }
 
