@@ -2,7 +2,7 @@
 **Motor Algébrico Ruptivo Transformacional Experimental Livre e Open Source**
 
 ![Status](https://img.shields.io/badge/Status-Estável-green)
-![Versão](https://img.shields.io/badge/Versão-v6.2.6-blue)
+![Versão](https://img.shields.io/badge/Versão-v6.3.2-blue)
 ![Licença](https://img.shields.io/badge/Licença-Apache%202.0-yellow)
 
 M.A.R.T.E.L.O.S. é um manifesto técnico pela **Soberania Algébrica**. Em um mundo de vigilância constante, o projeto foca em segurança **Off-Grid**, autonomia total e na entropia pura extraída de constantes transcendentais do universo.
@@ -34,12 +34,13 @@ cp martelos $PREFIX/bin/ && chmod +x $PREFIX/bin/martelos
 **Caminho 3 — Manual:**
 ```bash
 termux-setup-storage
-pkg update && pkg install -y clang gmp ffmpeg git
+pkg update && pkg install -y clang libgmp ffmpeg git
 git clone --depth 1 https://github.com/HonoravelMacho/martelos.git ~/martelos_temp
 cd ~/martelos_temp
 clang -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm
 cp martelos $PREFIX/bin/ && chmod +x $PREFIX/bin/martelos
 ```
+> **Nota v6.3.2 (Termux):** o pacote correto é `libgmp` (o antigo `gmp` não existe e quebrava a instalação). O `ffprobe` já vem junto com o pacote `ffmpeg`. Se a mídia falhar, rode `ffmpeg -version` e `ffprobe -version` para conferir; o martelos agora mostra o log real do ffmpeg em vez de um erro genérico.
 
 **Pré-requisito (só na 1ª vez):** autorize o acesso à memória com `termux-setup-storage`.
 

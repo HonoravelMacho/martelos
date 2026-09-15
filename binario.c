@@ -42,6 +42,93 @@ static const char* obter_extensao(const char* nome) {
     return p;
 }
 
+// --- Compatibilidade ffmpeg/ffprobe: Linux (Pop_OS/Ubuntu) e Android/Termux ---
+// No Termux o instalador antigo pedia o pacote inexistente "gmp" e escondia o
+// erro real do ffmpeg com "> /dev/null 2>&1". As funções abaixo detectam
+// ffmpeg/ffprobe ausentes, aceitam fallback sem ffprobe e SEMPRE mostram o
+// log do ffmpeg quando a conversão falha.
+static int tem_comando(const char* cmd) {
+    char buf[256];
+    snprintf(buf, sizeof buf, "command -v %s > /dev/null 2>&1", cmd);
+    return system(buf) == 0;
+}
+
+static void dica_ffmpeg_instalacao(void) {
+    printf("    Dicas de reparo:\n");
+    printf("    1) Confira o ffmpeg:  ffmpeg -version\n");
+    printf("       Termux (Android): pkg update && pkg install -y ffmpeg libgmp\n");
+    printf("       Linux (Pop_OS/Ubuntu): sudo apt update && sudo apt install -y ffmpeg libgmp-dev\n");
+    printf("    2) No Termux, na 1a vez rode: termux-setup-storage\n");
+    printf("    3) O arquivo precisa estar na pasta onde o terminal foi aberto (use cd antes de martelos).\n");
+}
+
+// Roda o ffmpeg guardando o stderr num log temporário. Em caso de falha,
+// exibe as últimas linhas do log em vez do genérico "Erro FFmpeg".
+// Retorna o código do system() (0 = ok).
+static int rodar_ffmpeg(const char* cmd_sem_log, const char* rotulo) {
+    char log[256];
+    snprintf(log, sizeof log, "/tmp/martelos_ffmpeg_%d.log", (int)getpid());
+    char full[8192];
+    snprintf(full, sizeof full, "%s > /dev/null 2> \"%s\"", cmd_sem_log, log);
+    int rc = system(full);
+    if (rc != 0) {
+        printf("[❌] Erro FFmpeg (%s, código %d).\n", rotulo, rc);
+        FILE* lf = fopen(log, "r");
+        if (lf) {
+            char linha[512]; int n = 0;
+            printf("---- log do ffmpeg ----\n");
+            while (fgets(linha, sizeof linha, lf) && n < 15) { printf("%s", linha); n++; }
+            if (n == 0) printf("(log vazio)\n");
+            printf("-----------------------\n");
+            fclose(lf);
+        } else {
+            printf("(não foi possível ler o log em %s)\n", log);
+        }
+        dica_ffmpeg_instalacao();
+    }
+    unlink(log);
+    return rc;
+}
+
+// Validação de stream com fallback: se o ffprobe existir, valida o stream
+// específico (a/v). Se não existir (Termux mínimo, PATH estranho), usa o
+// próprio ffmpeg como sonda e libera a prensagem para tentar — o erro real
+// aparece via rodar_ffmpeg(). Retorna 1 se liberado, 0 se bloqueado.
+static int validar_stream(const char* fip, char tipo_stream, const char* rotulo) {
+    if (!tem_comando("ffmpeg")) {
+        printf("[❌] ffmpeg não encontrado no PATH.\n");
+        dica_ffmpeg_instalacao();
+        return 0;
+    }
+    if (tem_comando("ffprobe")) {
+        char cmd[4096];
+        snprintf(cmd, sizeof(cmd),
+                 "ffprobe -v error -select_streams %c -show_entries stream=codec_name "
+                 "-of default=noprint_wrappers=1:nokey=1 \"%s\" > /dev/null 2>&1",
+                 tipo_stream, fip);
+        if (system(cmd) != 0) {
+            printf("[❌] Arquivo não contém %s válido ou o ffmpeg não consegue lê-lo: %s\n", rotulo, fip);
+            dica_ffmpeg_instalacao();
+            return 0;
+        }
+        return 1;
+    }
+    // Fallback sem ffprobe: o ffmpeg tenta abrir o arquivo.
+    {
+        char cmd[4096];
+        snprintf(cmd, sizeof(cmd),
+                 "ffmpeg -v error -i \"%s\" -f null - > /dev/null 2>&1", fip);
+        if (system(cmd) != 0) {
+            printf("[⚠️] ffprobe ausente e o ffmpeg não conseguiu abrir: %s\n", fip);
+            printf("    Instalando o ffprobe a validação fica completa (ele vem junto com o pacote ffmpeg).\n");
+            dica_ffmpeg_instalacao();
+            return 0;
+        }
+        printf("[⚠️] ffprobe não encontrado — validação de %s simplificada (só extensão + abertura).\n", rotulo);
+        return 1;
+    }
+}
+
 // Varre os chunks do RIFF/WAVE e devolve o offset onde começam as amostras PCM
 // (ou seja, o tamanho do cabeçalho a preservar). Fallback: 44.
 static long detectar_header_wav(const char* path) {
@@ -76,15 +163,8 @@ static int validar_entrada_audio(const char* fip) {
         return 0;
     }
     // ffprobe confirma que existe ao menos um stream de áudio decodificável
-    char cmd[4096];
-    snprintf(cmd, sizeof(cmd),
-             "ffprobe -v error -select_streams a -show_entries stream=codec_name "
-             "-of default=noprint_wrappers=1:nokey=1 \"%s\" > /dev/null 2>&1", fip);
-    if (system(cmd) != 0) {
-        printf("[❌] Arquivo não contém áudio válido ou o ffmpeg não consegue lê-lo: %s\n", fip);
-        return 0;
-    }
-    return 1;
+    // (com fallback para ffmpeg puro quando o ffprobe não está instalado).
+    return validar_stream(fip, 'a', "áudio");
 }
 
 // Retorna 1 se o arquivo pode ser tratado como vídeo, 0 caso contrário (com mensagem).
@@ -97,15 +177,8 @@ static int validar_entrada_video(const char* fip) {
         return 0;
     }
     // ffprobe confirma que existe ao menos um stream de vídeo decodificável
-    char cmd[4096];
-    snprintf(cmd, sizeof(cmd),
-             "ffprobe -v error -select_streams v -show_entries stream=codec_name "
-             "-of default=noprint_wrappers=1:nokey=1 \"%s\" > /dev/null 2>&1", fip);
-    if (system(cmd) != 0) {
-        printf("[❌] Arquivo não contém vídeo válido ou o ffmpeg não consegue lê-lo: %s\n", fip);
-        return 0;
-    }
-    return 1;
+    // (com fallback para ffmpeg puro quando o ffprobe não está instalado).
+    return validar_stream(fip, 'v', "vídeo");
 }
 
 // Retorna 1 se o arquivo pode ser tratado como imagem, 0 caso contrário (com mensagem).
@@ -118,15 +191,8 @@ static int validar_entrada_imagem(const char* fip) {
         return 0;
     }
     // ffprobe confirma que o arquivo abre como imagem (imagem = 1 stream de "vídeo")
-    char cmd[4096];
-    snprintf(cmd, sizeof(cmd),
-             "ffprobe -v error -select_streams v -show_entries stream=codec_name "
-             "-of default=noprint_wrappers=1:nokey=1 \"%s\" > /dev/null 2>&1", fip);
-    if (system(cmd) != 0) {
-        printf("[❌] Arquivo não contém imagem válida ou o ffmpeg não consegue lê-lo: %s\n", fip);
-        return 0;
-    }
-    return 1;
+    // (com fallback para ffmpeg puro quando o ffprobe não está instalado).
+    return validar_stream(fip, 'v', "imagem");
 }
 
 typedef struct { long ini, fim; } Fatia;
@@ -249,22 +315,30 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
     long h_size = 0, t_size_prot = 0;
 
     if (acao == 1) {
+        if (!tem_comando("ffmpeg")) {
+            printf("[❌] ffmpeg não encontrado no PATH — impossível prensar mídia.\n");
+            dica_ffmpeg_instalacao();
+            free(cs); return;
+        }
         if (sub_modo == 2) { // Imagens -> BMP Raw
             if (!validar_entrada_imagem(fip)) { free(cs); return; }
             snprintf(f_tmp, 2048, "%s_prensa.bmp", fip); h_size = 54;
-            sprintf(cmd, "ffmpeg -i \"%s\" -y -pix_fmt bgr24 \"%s\" > /dev/null 2>&1", fip, f_tmp);
-            if (system(cmd) != 0) { printf("[❌] Erro FFmpeg.\n"); return; }
+            // -vf format=bgr24 garante compatibilidade com ffmpeg 4/5/6/7/8 (Termux e desktop).
+            sprintf(cmd, "ffmpeg -v error -i \"%s\" -y -vf format=bgr24 \"%s\"", fip, f_tmp);
+            if (rodar_ffmpeg(cmd, "imagem -> BMP") != 0) { free(cs); return; }
         } else if (sub_modo == 3) { // Áudio -> WAV PCM (header detectado, não fixo)
             if (!validar_entrada_audio(fip)) { free(cs); return; }
             snprintf(f_tmp, 2048, "%s_prensa.wav", fip);
-            sprintf(cmd, "ffmpeg -i \"%s\" -y -vn -acodec pcm_s16le -ar 44100 \"%s\" > /dev/null 2>&1", fip, f_tmp);
-            if (system(cmd) != 0) { printf("[❌] Erro FFmpeg: não foi possível converter '%s' para WAV.\n", fip); free(cs); return; }
+            // -ac 2 explícito evita falha em builds mínimos (Termux) com entrada mono.
+            sprintf(cmd, "ffmpeg -v error -i \"%s\" -y -vn -acodec pcm_s16le -ar 44100 -ac 2 \"%s\"", fip, f_tmp);
+            if (rodar_ffmpeg(cmd, "áudio -> WAV") != 0) { free(cs); return; }
             h_size = detectar_header_wav(f_tmp);
         } else if (sub_modo == 4) { // Vídeo -> AVI RAW (CHIADO CINZA)
             if (!validar_entrada_video(fip)) { free(cs); return; }
             snprintf(f_tmp, 2048, "%s_prensa.avi", fip); h_size = 10240; t_size_prot = 512000;
-            sprintf(cmd, "ffmpeg -i \"%s\" -y -vcodec rawvideo -acodec pcm_s16le -f avi \"%s\" > /dev/null 2>&1", fip, f_tmp);
-            if (system(cmd) != 0) { printf("[❌] Erro FFmpeg.\n"); return; }
+            // -pix_fmt bgr24 explícito: sem ele o rawvideo falha no ffmpeg 5+ / Termux ffmpeg 8.
+            sprintf(cmd, "ffmpeg -v error -i \"%s\" -y -pix_fmt bgr24 -vcodec rawvideo -acodec pcm_s16le -f avi \"%s\"", fip, f_tmp);
+            if (rodar_ffmpeg(cmd, "vídeo -> AVI raw") != 0) { free(cs); return; }
         }
     } else {
         if (sub_modo == 2) h_size = 54;

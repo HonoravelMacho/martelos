@@ -2,9 +2,9 @@
 set -e
 
 # 1. Detecção de Ambiente
-if [ -d "/data/data/com.termux/files/usr/bin" ]; then
+if [ -d "/data/data/com.termux/files/usr/bin" ] || [ -n "$TERMUX_VERSION" ]; then
     OS="Android-Termux"
-    BIN_DIR="/data/data/com.termux/files/usr/bin"
+    BIN_DIR="${PREFIX:-/data/data/com.termux/files/usr}/bin"
     PKG_MGR="pkg install -y"
     SUDO=""
 else
@@ -14,15 +14,19 @@ else
     SUDO="sudo"
 fi
 
-echo "🔨 Instalando M.A.R.T.E.L.O.S. v6.2.7 no $OS..."
+echo "🔨 Instalando M.A.R.T.E.L.O.S. v6.3.2 no $OS..."
 
 # 2. Instalação de Dependências
+# CORREÇÃO v6.3.2: no Termux o pacote é "libgmp" (não "gmp") e o ffprobe
+# acompanha o pacote "ffmpeg". Sem isso o instalador quebrava no Android.
 if [ "$OS" = "Linux-Desktop" ]; then
     sudo apt update
     $PKG_MGR libgmp-dev cmake build-essential git ffmpeg
 else
-    pkg update
-    $PKG_MGR libgmp cmake clang git ffmpeg
+    pkg update -y
+    $PKG_MGR libgmp clang git ffmpeg
+    command -v ffmpeg >/dev/null || { echo "[❌] ffmpeg não instalado. Rode: pkg install -y ffmpeg"; exit 1; }
+    command -v ffprobe >/dev/null && echo "✅ ffprobe OK." || echo "⚠️ ffprobe ausente — validação de mídia simplificada."
 fi
 
 # 3. Compilação de Alta Performance
@@ -46,6 +50,8 @@ else
 fi
 
 # 6. Ícone e tipo MIME dos arquivos .martelos (2 martelos cruzados)
+# No Termux não há /usr/share nem sudo: pula esta etapa (o .martelos segue funcional).
+if [ "$OS" = "Linux-Desktop" ]; then
 echo "🎨 Registrando ícone dos arquivos .martelos..."
 $SUDO cp martelos-mime.xml /usr/share/mime/packages/martelos.xml
 $SUDO mkdir -p /usr/share/icons/hicolor/scalable/mimetypes /usr/share/icons/hicolor/48x48/mimetypes
@@ -53,8 +59,11 @@ $SUDO cp martelos-icon.svg /usr/share/icons/hicolor/scalable/mimetypes/applicati
 $SUDO cp martelos-icon-48.png /usr/share/icons/hicolor/48x48/mimetypes/application-x-martelos.png
 $SUDO update-mime-database /usr/share/mime
 $SUDO gtk-update-icon-cache -f /usr/share/icons/hicolor > /dev/null 2>&1 || true
+else
+echo "ℹ️ Termux: registro de ícone/MIME ignorado (sem /usr/share no Android)."
+fi
 
 echo "================================================="
-echo "✅ M.A.R.T.E.L.O.S. v6.2.7 INSTALADO COM SUCESSO!"
+echo "✅ M.A.R.T.E.L.O.S. v6.3.2 INSTALADO COM SUCESSO!"
 echo "Operação transparente: Downloads/martelos ativa."
 echo "================================================="

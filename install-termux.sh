@@ -3,9 +3,14 @@
 # Um único comando instala a versão mais recente do GitHub ou atualiza a antiga:
 #   curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install-termux.sh | bash
 set -e
-echo "🔨 M.A.R.T.E.L.O.S. no Termux (instalação/atualização)..."
-pkg update
-pkg install -y clang gmp ffmpeg git
+echo "🔨 M.A.R.T.E.L.O.S. v6.3.2 no Termux (instalação/atualização)..."
+pkg update -y
+# CORREÇÃO v6.3.2: o pacote Termux chama-se "libgmp" (o antigo "gmp" não existe
+# e quebrava o instalador) e o ffprobe vem junto com o pacote "ffmpeg".
+pkg install -y clang libgmp ffmpeg git
+command -v ffmpeg >/dev/null || { echo "[❌] ffmpeg não instalado. Rode: pkg install -y ffmpeg"; exit 1; }
+command -v ffprobe >/dev/null && echo "✅ ffprobe OK (validação de mídia completa)." || echo "⚠️ ffprobe ausente — o martelos usará validação simplificada via ffmpeg."
+ffmpeg -version | head -n 1
 cd ~
 rm -rf ~/martelos_temp
 git clone --depth 1 https://github.com/HonoravelMacho/martelos.git ~/martelos_temp
