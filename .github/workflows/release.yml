@@ -88,7 +88,8 @@ jobs:
           Summary: Motor Algebrico Ruptivo Transformacional Experimental
           License: Apache-2.0
           Source0: martelos-%{version}.tar.gz
-          BuildRequires: gcc make
+          # BuildRequires omitido: o runner já tem gcc/make (o rpm do Debian
+          # valida BuildRequires só com pacotes instalados e falhava aqui).
 
           %description
           Engine de criptografia em C com N senhas e constantes irracionais.
@@ -148,14 +149,16 @@ jobs:
   linux-static:
     needs: [prep]
     runs-on: ubuntu-latest
-    container: alpine:latest
     env:
       VERSION: ${{ needs.prep.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - name: Dependencias (musl)
-        run: apk add --no-cache build-base curl m4
-      - name: Compilar GMP estatico (musl)
+      # Sem container alpine: o configure do GMP 6.3.0 não passava nos testes
+      # do compilador no musl novo ("could not find a working compiler").
+      # No Ubuntu (glibc) o GMP estático compila como no desktop de referência.
+      - name: Dependencias (Ubuntu)
+        run: sudo apt-get update && sudo apt-get install -y build-essential m4
+      - name: Compilar GMP estatico
         run: |
           curl -sSL "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VER}.tar.xz" -o /tmp/gmp.tar.xz
           mkdir -p /tmp/gmp && tar xf /tmp/gmp.tar.xz -C /tmp/gmp

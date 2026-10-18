@@ -1,6 +1,11 @@
+# Somente artifacts de build na RAIZ (ignores genéricos quebravam files de
+# packaging/, ex.: packaging/android/java/com/martelos/)
 build/
-m
-martelos
-martelos_test
-*.txt
+/m
+/martelos
+/martelos_test
 *.o
+# rascunhos locais (não confundir com *.txt do projeto)
+/contexto_martelos.txt
+/martelos_output.txt
+/cli_output.txt

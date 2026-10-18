@@ -49,7 +49,12 @@ static const char* obter_extensao(const char* nome) {
 // log do ffmpeg quando a conversão falha.
 static int tem_comando(const char* cmd) {
     char buf[256];
+#ifdef _WIN32
+    // Windows (MinGW): o system() vai para o cmd.exe — 'command -v' não existe.
+    snprintf(buf, sizeof buf, "where %s > NUL 2>&1", cmd);
+#else
     snprintf(buf, sizeof buf, "command -v %s > /dev/null 2>&1", cmd);
+#endif
     return system(buf) == 0;
 }
 
@@ -62,11 +67,14 @@ static char FP_PATH[1104] = "";  // caminho resolvido do ffprobe (com aspas)
 
 static int achar_prog(const char* nome, char* out, size_t n) {
     char buf[256];
-    snprintf(buf, sizeof buf, "command -v %s > /dev/null 2>&1", nome);
-    if (system(buf) == 0) {
+    if (tem_comando(nome)) {
         snprintf(out, n, "%s", nome); // no PATH: usa o nome normal
         return 1;
     }
+#ifdef _WIN32
+    // Windows: sem /proc e sem chmod — só o PATH resolve o ffmpeg.
+    return 0;
+#else
     // Procura lib<nome>.so empacotado ao lado do próprio martelos
     char self[1024];
     ssize_t rl = readlink("/proc/self/exe", self, sizeof(self) - 1);
@@ -84,6 +92,7 @@ static int achar_prog(const char* nome, char* out, size_t n) {
         }
     }
     return 0;
+#endif
 }
 
 static int tem_ffmpeg(void) {
