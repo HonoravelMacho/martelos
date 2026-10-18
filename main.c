@@ -79,6 +79,14 @@ void processar_flags(int argc, char** argv) {
         else if (strcmp(argv[i], "-o") == 0) { i++; if(i < argc) { snprintf(saida_custom, 1024, "%s", argv[i]); tem_saida_custom = 1; } }
     }
 
+    // CORREÇÃO v6.3.4: descriptografia de mídia via CLI (-i/-a/-v -d) não deve
+    // re-aplicar "_glitch" (o caminho interativo usa *_fix_*; os fatos falhavam
+    // quando o acao era processado depois do alvo).
+    if (alvo >= 2 && alvo <= 4 && acao == 2) {
+        const char* extm = (alvo == 2) ? ".bmp" : (alvo == 3) ? ".wav" : ".avi";
+        snprintf(fop, 1024, "%s_fix%s", entrada, extm);
+    }
+
     if (tem_saida_custom) snprintf(fop, 1024, "%s", saida_custom); // vale em qualquer ordem das flags
     if (alvo == 5 && acao == 2 && !tem_saida_custom) {
         // Descriptografia .martelos: usa a extensão guardada no cabeçalho

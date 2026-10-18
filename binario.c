@@ -53,6 +53,47 @@ static int tem_comando(const char* cmd) {
     return system(buf) == 0;
 }
 
+// --- CORREÇÃO v6.3.4 (PORTE/APK): resolve ffmpeg/ffprobe em PATH normal OU
+// empacotado como lib<cmd>.so no MESMO diretório do binário do martelos
+// (Android: nativeLibraryDir, o único ponto executável do APK). Isso permite
+// os modos de mídia (-i/-a/-v) funcionarem dentro do app PORTE sem Termux.
+static char FF_PATH[1104] = "";  // caminho resolvido do ffmpeg (com aspas)
+static char FP_PATH[1104] = "";  // caminho resolvido do ffprobe (com aspas)
+
+static int achar_prog(const char* nome, char* out, size_t n) {
+    char buf[256];
+    snprintf(buf, sizeof buf, "command -v %s > /dev/null 2>&1", nome);
+    if (system(buf) == 0) {
+        snprintf(out, n, "%s", nome); // no PATH: usa o nome normal
+        return 1;
+    }
+    // Procura lib<nome>.so empacotado ao lado do próprio martelos
+    char self[1024];
+    ssize_t rl = readlink("/proc/self/exe", self, sizeof(self) - 1);
+    if (rl > 0) {
+        self[rl] = '\0';
+        char* slash = strrchr(self, '/');
+        if (slash) {
+            *slash = '\0';
+            char cand[1108];
+            snprintf(cand, sizeof cand, "%s/lib%s.so", self, nome);
+            if (access(cand, X_OK) == 0) {
+                snprintf(out, n, "\"%s\"", cand);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int tem_ffmpeg(void) {
+    return achar_prog("ffmpeg", FF_PATH, sizeof FF_PATH);
+}
+
+static int tem_ffprobe(void) {
+    return achar_prog("ffprobe", FP_PATH, sizeof FP_PATH);
+}
+
 static void dica_ffmpeg_instalacao(void) {
     printf("    Dicas de reparo:\n");
     printf("    1) Confira o ffmpeg:  ffmpeg -version\n");
@@ -126,17 +167,17 @@ static int rodar_ffmpeg(const char* cmd_sem_log, const char* rotulo) {
 // próprio ffmpeg como sonda e libera a prensagem para tentar — o erro real
 // aparece via rodar_ffmpeg(). Retorna 1 se liberado, 0 se bloqueado.
 static int validar_stream(const char* fip, char tipo_stream, const char* rotulo) {
-    if (!tem_comando("ffmpeg")) {
-        printf("[❌] ffmpeg não encontrado no PATH.\n");
+    if (!tem_ffmpeg()) {
+        printf("[❌] ffmpeg não encontrado (PATH ou empacotado).\n");
         dica_ffmpeg_instalacao();
         return 0;
     }
-    if (tem_comando("ffprobe")) {
+    if (tem_ffprobe()) {
         char cmd[4096];
         snprintf(cmd, sizeof(cmd),
-                 "ffprobe -v error -select_streams %c -show_entries stream=codec_name "
+                 "%s -v error -select_streams %c -show_entries stream=codec_name "
                  "-of default=noprint_wrappers=1:nokey=1 \"%s\" > /dev/null 2>&1",
-                 tipo_stream, fip);
+                 FP_PATH, tipo_stream, fip);
         if (system(cmd) != 0) {
             printf("[❌] Arquivo não contém %s válido ou o ffmpeg não consegue lê-lo: %s\n", rotulo, fip);
             dica_ffmpeg_instalacao();
@@ -148,7 +189,7 @@ static int validar_stream(const char* fip, char tipo_stream, const char* rotulo)
     {
         char cmd[4096];
         snprintf(cmd, sizeof(cmd),
-                 "ffmpeg -v error -i \"%s\" -f null - > /dev/null 2>&1", fip);
+                 "%s -v error -i \"%s\" -f null - > /dev/null 2>&1", FF_PATH, fip);
         if (system(cmd) != 0) {
             printf("[⚠️] ffprobe ausente e o ffmpeg não conseguiu abrir: %s\n", fip);
             printf("    Instalando o ffprobe a validação fica completa (ele vem junto com o pacote ffmpeg).\n");
@@ -346,7 +387,12 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
     long h_size = 0, t_size_prot = 0;
 
     if (acao == 1) {
-        if (!tem_comando("ffmpeg")) {
+        // CORREÇÃO v6.3.4: o ffmpeg só é exigido nos modos de MÍDIA (2=img,
+        // 3=audio, 4=video). O modo genérico (-m / sub_modo=1) não usa ffmpeg
+        // — antes ele ganhava "[❌] ffmpeg não encontrado" e um exit 0 no
+        // Android sem ffmpeg, o que fazia o PORTE/APIs reportarem "sucesso"
+        // sem arquivo nenhum criado.
+        if (sub_modo >= 2 && !tem_ffmpeg()) {
             printf("[❌] ffmpeg não encontrado no PATH — impossível prensar mídia.\n");
             dica_ffmpeg_instalacao();
             free(cs); return;
@@ -355,20 +401,20 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
             if (!validar_entrada_imagem(fip)) { free(cs); return; }
             snprintf(f_tmp, 2048, "%s_prensa.bmp", fip); h_size = 54;
             // -vf format=bgr24 garante compatibilidade com ffmpeg 4/5/6/7/8 (Termux e desktop).
-            sprintf(cmd, "ffmpeg -v error -i \"%s\" -y -vf format=bgr24 \"%s\"", fip, f_tmp);
+            sprintf(cmd, "%s -v error -i \"%s\" -y -vf format=bgr24 \"%s\"", FF_PATH, fip, f_tmp);
             if (rodar_ffmpeg(cmd, "imagem -> BMP") != 0) { free(cs); return; }
         } else if (sub_modo == 3) { // Áudio -> WAV PCM (header detectado, não fixo)
             if (!validar_entrada_audio(fip)) { free(cs); return; }
             snprintf(f_tmp, 2048, "%s_prensa.wav", fip);
             // -ac 2 explícito evita falha em builds mínimos (Termux) com entrada mono.
-            sprintf(cmd, "ffmpeg -v error -i \"%s\" -y -vn -acodec pcm_s16le -ar 44100 -ac 2 \"%s\"", fip, f_tmp);
+            sprintf(cmd, "%s -v error -i \"%s\" -y -vn -acodec pcm_s16le -ar 44100 -ac 2 \"%s\"", FF_PATH, fip, f_tmp);
             if (rodar_ffmpeg(cmd, "áudio -> WAV") != 0) { free(cs); return; }
             h_size = detectar_header_wav(f_tmp);
         } else if (sub_modo == 4) { // Vídeo -> AVI RAW (CHIADO CINZA)
             if (!validar_entrada_video(fip)) { free(cs); return; }
             snprintf(f_tmp, 2048, "%s_prensa.avi", fip); h_size = 10240; t_size_prot = 512000;
             // -pix_fmt bgr24 explícito: sem ele o rawvideo falha no ffmpeg 5+ / Termux ffmpeg 8.
-            sprintf(cmd, "ffmpeg -v error -i \"%s\" -y -pix_fmt bgr24 -vcodec rawvideo -acodec pcm_s16le -f avi \"%s\"", fip, f_tmp);
+            sprintf(cmd, "%s -v error -i \"%s\" -y -pix_fmt bgr24 -vcodec rawvideo -acodec pcm_s16le -f avi \"%s\"", FF_PATH, fip, f_tmp);
             if (rodar_ffmpeg(cmd, "vídeo -> AVI raw") != 0) { free(cs); return; }
         }
     } else {
