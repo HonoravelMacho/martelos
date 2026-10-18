@@ -1,6 +1,7 @@
 #include "martelos.h"
 #include <dirent.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <time.h>
 
 #define IGNORE_RET(x) if(x){}
@@ -11,7 +12,15 @@ void listar_arquivos_entrada(char* cam) {
     struct dirent *dir;
     if (d) {
         int found = 0;
-        while ((dir = readdir(d))) if (dir->d_type == DT_REG) { printf("- %s\n", dir->d_name); found = 1; }
+        // stat() em vez de d_type/DT_REG: dirent do MinGW (Windows) não tem
+        // d_type — o .exe quebrava no link/compile.
+        while ((dir = readdir(d))) {
+            if (!strcmp(dir->d_name, ".") || !strcmp(dir->d_name, "..")) continue;
+            char caminho_completo[2048];
+            struct stat st;
+            IGNORE_RET(snprintf(caminho_completo, sizeof caminho_completo, "%s/%s", cam, dir->d_name));
+            if (stat(caminho_completo, &st) == 0 && S_ISREG(st.st_mode)) { printf("- %s\n", dir->d_name); found = 1; }
+        }
         if (!found) printf("(Pasta vazia)\n");
         closedir(d);
     }

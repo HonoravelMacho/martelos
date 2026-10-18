@@ -251,7 +251,7 @@ jobs:
           keytool -genkeypair -keystore debug.keystore -alias androiddebugkey \
             -storepass android -keypass android -keyalg RSA -validity 10950 \
             -dname "CN=Android Debug" -noprompt
-          "$BT/apksigner" sign --ks debug.keystore --ks-pass:android \
+          "$BT/apksigner" sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android \
             --out "martelos-${VERSION}-android-signed.apk" "martelos-${VERSION}-android.apk"
           mv "martelos-${VERSION}-android-signed.apk" "martelos-${VERSION}-android.apk"
           "$BT/apksigner" verify --print-certs "martelos-${VERSION}-android.apk"
