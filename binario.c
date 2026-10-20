@@ -717,6 +717,38 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
     fclose(fin); fclose(fout);
     if (acao == 1 && sub_modo >= 2) unlink(f_tmp);
     free(buf); free(cs); free(fatias);
+
+    // v6.3.5 (vídeo): na descriptografia, converte o *_fix.avi cru (bgr24,
+    // ~2.7MB/frame) para *.mp4 (H.264 yuv420p). O AVI crus depende do player
+    // interpretar rawvideo — no Android alguns apps (VLC mobile incluso)
+    // exibem esses AVIs com tonalidade avermelhada; o MP4 é universal.
+    // Se a re-codificação falhar, mantemos o *_fix.avi como está.
+    if (acao == 2 && sub_modo == 4 && tem_ffmpeg()) {
+        char fmp4[2100];
+        snprintf(fmp4, sizeof fmp4, "%s", fop);
+        char* barra_ = strrchr(fmp4, '/');
+        char* ponto = strrchr(fmp4, '.');
+        if (ponto && (!barra_ || ponto > barra_)) strcpy(ponto, ".mp4");
+        else strncat(fmp4, ".mp4", sizeof fmp4 - strlen(fmp4) - 1);
+        snprintf(cmd, sizeof cmd,
+                 "%s -v error -i \"%s\" -vf format=yuv420p -c:v libx264 -crf 18 -preset veryfast -movflags +faststart -c:a aac \"%s\"",
+                 FF_PATH, fop, fmp4);
+        int mp4_ok = (rodar_ffmpeg(cmd, "vídeo restaurado -> mp4") == 0 && access(fmp4, F_OK) == 0);
+        if (!mp4_ok) {
+            // fallback para builds mínimos sem libx264
+            snprintf(cmd, sizeof cmd,
+                     "%s -v error -i \"%s\" -vf format=yuv420p -c:v mpeg4 -q:v 5 -c:a aac \"%s\"",
+                     FF_PATH, fop, fmp4);
+            mp4_ok = (rodar_ffmpeg(cmd, "vídeo restaurado -> mp4 (mpeg4)") == 0 && access(fmp4, F_OK) == 0);
+        }
+        if (mp4_ok) {
+            unlink(fop);
+            printf("[📦] Vídeo restaurado convertido para .mp4 (compacto e universal); o .avi cru foi removido.\n");
+            printf(" OK! (%.4fs)\n[✅] Finalizado em: %s\n", (double)(clock()-t_i)/CLOCKS_PER_SEC, fmp4);
+            return;
+        }
+        printf("[ℹ️] Re-codificação mp4 indisponível — o vídeo restaurado ficou em: %s\n", fop);
+    }
     printf(" OK! (%.4fs)\n[✅] Finalizado em: %s\n", (double)(clock()-t_i)/CLOCKS_PER_SEC, fop);
 }
 

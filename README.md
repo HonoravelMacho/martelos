@@ -42,6 +42,8 @@ cp martelos $PREFIX/bin/ && chmod +x $PREFIX/bin/martelos
 ```
 > **Nota v6.3.3 (Termux):** o pacote correto é `libgmp` (o antigo `gmp` não existe e quebrava a instalação). O `ffprobe` já vem junto com o pacote `ffmpeg`. Se a mídia falhar, rode `ffmpeg -version` e `ffprobe -version` para conferir; o martelos agora mostra o log real do ffmpeg em vez de um erro genérico. O log usa `$TMPDIR` (`$PREFIX/tmp` no Termux) porque o `/tmp` do Android não tem escrita.
 
+> **Nota v6.3.5 (vídeo, todos os sistemas):** a criptografia de vídeo continua gerando o `*_glitch.avi` (AVI cru bgr24 — caos cinza). Na **descriptografia**, o martelos agora também converte o vídeo restaurado para `*_fix.mp4` (H.264 + yuv420p) e remove o `.avi` cru — o MP4 exibe a cor correta em qualquer player (no Android o VLC mobile tende a exibir AVIs sem compressão com tonalidade avermelhada; o `.mp4` eliminou essa dependência). Para diagnosticar a cor no Termux: `curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/teste-cor-video.sh | bash`
+
 **Pré-requisito (só na 1ª vez):** autorize o acesso à memória com `termux-setup-storage`.
 
 ---
