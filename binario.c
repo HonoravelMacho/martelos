@@ -336,6 +336,105 @@ static int mapear_payloads_avi(const char* path, Fatia** out) {
     *out = v; return n;
 }
 
+// ================= ARTEFATO .mp4 (v6.3.5 - EXPERIÊNCIA IGUAL NO PC/ANDROID) =================
+// A partir do v6.3.5, o VÍDEO criptografado é um .mp4 legítimo: contém uma
+// faixa de vídeo REAL (decodificada do próprio chiado, em baixa resolução e
+// 2 quadros/s) — o "chiado assistível" da proposta original, agora visível
+// em QUALQUER player de Android, Windows, Linux e Mac (o VLC mobile não
+// interpretava o AVI cru bgr24 de forma confiável: rosa/preto).
+// O payload criptografado (o glitch.avi inteiro) viaja num átomo 'MART'
+// (desconhecido para players, que o ignoram) — a reversibilidade é byte-exata:
+//   ENCRYPT: martelos -c -v video.mp4  -> *_glitch.mp4   (chiado + átomo MART)
+//   DECRYPT: martelos -d -v *_glitch.mp4 -> extrai MART -> *_fix.mp4 restaurado
+// AVI antigos (*_glitch.avi) continuam sendo descriptografados normalmente.
+#ifdef _WIN32
+#define POPA_CMD(cmd) _popen((cmd), "r")
+#define POPA_FEC(p)   _pclose((p))
+#else
+#define POPA_CMD(cmd) popen((cmd), "r")
+#define POPA_FEC(p)   pclose((p))
+#endif
+
+static unsigned int ler32be(FILE* f) {
+    unsigned char b[4];
+    if (fread(b, 1, 4, f) != 4) return 0;
+    return ((unsigned int)b[0] << 24) | ((unsigned int)b[1] << 16) | ((unsigned int)b[2] << 8) | b[3];
+}
+
+static unsigned long long ler64be(FILE* f) {
+    unsigned char b[8];
+    if (fread(b, 1, 8, f) != 8) return 0;
+    unsigned long long v = 0;
+    for (int i = 0; i < 8; i++) v = (v << 8) | b[i];
+    return v;
+}
+
+// Extrai o átomo 'MART' de um *_glitch.mp4 gravando o AVI cru (scrambled) em
+// tmpout (TMPDIR/PREFIX/tmp). Retorna 1 se extraído; 0 se não for um .mp4 do
+// martelos (então o chamador segue pelo caminho normal).
+static int desempacotar_glitch_mp4(const char* fip, char* tmpout, size_t n) {
+    FILE* f = fopen(fip, "rb");
+    if (!f) return 0;
+    unsigned char h[8];
+    size_t rl = fread(h, 1, 8, f);
+    if (rl < 8 || memcmp(h + 4, "ftyp", 4) != 0) { fclose(f); return 0; }
+    fseek(f, 0, SEEK_END);
+    long total = ftell(f);
+    rewind(f);
+    int achou = 0;
+    long blob_ini = 0;
+    unsigned long long blob_sz = 0;
+    long off = 0;
+    while (off + 8 <= total) {
+        fseek(f, off, SEEK_SET);
+        unsigned int sz = ler32be(f);
+        unsigned char ty[4];
+        if (fread(ty, 1, 4, f) != 4) break;
+        unsigned long long sz64 = sz;
+        long pay_off = off + 8;   // payload começa depois do size+type
+        if (sz == 1) {
+            sz64 = ler64be(f);
+            pay_off += 8;         // largesize ocupa mais 8 bytes
+            if (sz64 < 24) break;
+        } else if (sz == 0) {
+            sz64 = (unsigned long long)(total - off);
+        }
+        if (memcmp(ty, "MART", 4) == 0) {
+            blob_ini = pay_off;
+            blob_sz = (sz == 1) ? (sz64 - 16) : (sz64 - 8); // só o payload
+            achou = 1;
+            break;
+        }
+        if (sz64 < 8 || sz64 > (unsigned long long)(total - off)) break;
+        off += (long)sz64;
+    }
+    if (!achou || blob_sz < 16) { fclose(f); return 0; }
+    const char* td = getenv("TMPDIR");
+    char base[1024];
+    if (td && *td) snprintf(base, sizeof base, "%s", td);
+    else {
+        const char* px = getenv("PREFIX");
+        if (px && *px) snprintf(base, sizeof base, "%s/tmp", px);
+        else snprintf(base, sizeof base, "/tmp");
+    }
+    snprintf(tmpout, n, "%s/martelos_glitch_%d.avi", base, (int)getpid());
+    FILE* o = fopen(tmpout, "wb");
+    if (!o) { fclose(f); return 0; }
+    fseek(f, blob_ini, SEEK_SET);
+    unsigned char cp[65536];
+    unsigned long long resta = blob_sz;
+    while (resta > 0) {
+        size_t w2 = resta > sizeof cp ? sizeof cp : (size_t)resta;
+        size_t gr = fread(cp, 1, w2, f);
+        if (gr == 0) break;
+        fwrite(cp, 1, gr, o);
+        resta -= gr;
+    }
+    fclose(o);
+    fclose(f);
+    return resta == 0;
+}
+
 // Desenha a barra "progresso" (tty: reescreve a linha; sem tty: 1 linha a cada 10%).
 static void atualizar_barra(int eh_tty, double pct, long feito, long total, double decorrido,
                             long* last_pct4, clock_t* last_draw, clock_t agora, int* last_fatia) {
@@ -442,7 +541,15 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         else if (sub_modo == 4) { h_size = 10240; t_size_prot = 512000; }
     }
 
-    FILE *fin = fopen(f_tmp, "rb"), *fout = fopen(fop, "wb");
+    // v6.3.5 (vídeo, acao==1): o scramble vai para um AVI interno (tmpavi) e,
+    // no final, é empacotado como .mp4 legítimo (chiado assistível + átomo MART).
+    char tmpavi[2100] = "";
+    int empacotar = 0;
+    if (acao == 1 && sub_modo == 4 && tem_ffmpeg()) {
+        snprintf(tmpavi, sizeof tmpavi, "%s_prensa_glitch.avi", fip);
+        empacotar = 1;
+    }
+    FILE *fin = fopen(f_tmp, "rb"), *fout = fopen(empacotar ? tmpavi : fop, "wb");
     if (!fin || !fout) {
         if (!fin) {
             printf("[❌] Não encontrei o arquivo de entrada: %s\n", f_tmp);
@@ -471,7 +578,7 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         }
         if (!okm) {
             const char* esperado = (sub_modo == 2) ? ".bmp de chiado (*_glitch.bmp)"
-                : (sub_modo == 3) ? ".wav de chiado (*_glitch.wav)" : ".avi de chiado (*_glitch.avi)";
+                : (sub_modo == 3) ? ".wav de chiado (*_glitch.wav)" : ".mp4 de chiado (*_glitch.mp4; AVI cru antigo também aceito)";
             printf("[❌] '%s' não parece um glitch gerado pelo martelos.\n", f_tmp);
             printf("    Para descriptografar, escolha o arquivo %s — não o arquivo original.\n", esperado);
             fclose(fin); fclose(fout); unlink(fop); free(cs); return;
@@ -715,6 +822,71 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
     } // fim do caminho legado (imagem/audio/generico/fallback de video)
 
     fclose(fin); fclose(fout);
+
+    // -------- v6.3.5 (vídeo, encrypt): empacota como .mp4 legítimo --------
+    // 1) faixa de vídeo = o PRÓPRIO chiado re-codificado (160px, 2 q/s, crf 40):
+    //    duração TOTAL, tamanho de MBs, e legível em qualquer player/OS.
+    // 2) payload = o AVI scrambled inteiro dentro do átomo 'MART'.
+    if (empacotar) {
+        char ruide[2100];
+        snprintf(ruide, sizeof ruide, "%s_prensa_ruido.mp4", fip);
+        unlink(ruide);
+        snprintf(cmd, sizeof cmd,
+                 "%s -v error -i \"%s\" -vf \"scale=160:-2,format=yuv420p\" -r 2 -c:v libx264 -crf 40 -preset veryfast -an -y \"%s\"",
+                 FF_PATH, tmpavi, ruide);
+        int ok_ruido = (rodar_ffmpeg(cmd, "chiado assistível") == 0 && access(ruide, F_OK) == 0);
+        if (!ok_ruido) {
+            snprintf(cmd, sizeof cmd,
+                     "%s -v error -i \"%s\" -vf \"scale=160:-2,format=yuv420p\" -r 2 -c:v mpeg4 -q:v 20 -an -y \"%s\"",
+                     FF_PATH, tmpavi, ruide);
+            ok_ruido = (rodar_ffmpeg(cmd, "chiado assistível (mpeg4)") == 0 && access(ruide, F_OK) == 0);
+        }
+        FILE* fn = ok_ruido ? fopen(ruide, "rb") : NULL;
+        FILE* fp = fopen(tmpavi, "rb");
+        FILE* fo = NULL;
+        int montado = 0;
+        if (ok_ruido && fn && fp) {
+            fo = fopen(fop, "wb");
+            if (fo) {
+                fseek(fn, 0, SEEK_END); long szn = ftell(fn); rewind(fn);
+                fseek(fp, 0, SEEK_END); unsigned long long szp = (unsigned long long)ftell(fp); rewind(fp);
+                if (szn > 0 && szp > 0) {
+                    unsigned char chunk[65536]; size_t gr; long sr = 0;
+                    rewind(fn);
+                    while ((gr = fread(chunk, 1, sizeof chunk, fn)) > 0) { fwrite(chunk, 1, gr, fo); sr += (long)gr; }
+                    (void)sr;
+                    // Átomo 'MART' (players pulam átomos desconhecidos):
+                    if (szp + 16 <= 0xFFFFFFFFULL) {
+                        unsigned int t = (unsigned int)(szp + 8);
+                        fputc((t >> 24) & 0xFF, fo); fputc((t >> 16) & 0xFF, fo);
+                        fputc((t >> 8) & 0xFF, fo); fputc(t & 0xFF, fo);
+                        fwrite("MART", 1, 4, fo);
+                    } else {
+                        fputc(0, fo); fputc(0, fo); fputc(0, fo); fputc(1, fo); // largesize
+                        fwrite("MART", 1, 4, fo);
+                        unsigned long long t64 = szp + 16;
+                        for (int i = 7; i >= 0; i--) fputc((int)((t64 >> (8 * i)) & 0xFF), fo);
+                    }
+                    rewind(fp);
+                    while ((gr = fread(chunk, 1, sizeof chunk, fp)) > 0) fwrite(chunk, 1, gr, fo);
+                    montado = 1;
+                }
+                fclose(fo);
+            }
+        }
+        if (fn) fclose(fn);
+        if (fp) fclose(fp);
+        unlink(ruide);
+        unlink(tmpavi);
+        unlink(f_tmp); // v6.3.5: o return adiantado pulava esta limpeza — _prensa.avi não fica para trás
+        if (montado) {
+            printf("[📦] Vídeo criptografado como .mp4 (chiado assistível + payload reversível): %s\n", fop);
+            printf(" OK! (%.4fs)\n[✅] Finalizado em: %s\n", (double)(clock()-t_i)/CLOCKS_PER_SEC, fop);
+            return;
+        }
+        printf("[ℹ️] Empacotamento .mp4 indisponível — arquivo criptografado como AVI cru: %s\n", fop);
+    }
+
     if (acao == 1 && sub_modo >= 2) unlink(f_tmp);
     free(buf); free(cs); free(fatias);
 
@@ -767,7 +939,7 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
         if (sub_modo == 1) sprintf(no, "%s.martelos", ni);
         else if (sub_modo == 2) sprintf(no, "%s_glitch.bmp", base);
         else if (sub_modo == 3) sprintf(no, "%s_glitch.wav", base);
-        else sprintf(no, "%s_glitch.avi", base);
+        else sprintf(no, "%s_glitch.mp4", base);
     } else {
         if (sub_modo == 1) {
             char ext_auto[MART_MAXEXT + 1];
@@ -787,7 +959,7 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
     snprintf(fop, 1024, "%s", no);
     if (acao == 1) {
         // Nome personalizado do arquivo criptografado (Enter = mantém o padrão).
-        const char* dext = (sub_modo == 1) ? ".martelos" : (sub_modo == 2) ? ".bmp" : (sub_modo == 3) ? ".wav" : ".avi";
+        const char* dext = (sub_modo == 1) ? ".martelos" : (sub_modo == 2) ? ".bmp" : (sub_modo == 3) ? ".wav" : ".mp4";
         printf("Nome do arquivo criptografado [Enter = %s]: ", no);
         int c; while ((c = getchar()) != '\n' && c != EOF); // limpa o resto da linha anterior
         char custom[320];
@@ -806,7 +978,13 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
         char m[50]; sprintf(m, "FRASE %d/%d:", i+1, nf); 
         char* fr = ler_texto_ctrl_d(m); int d; cs[i] = calcular_casa_quiasmo(fr, &d); free(fr); 
     }
-    processar_binario_core(fip, fop, acao, sub_modo, tipo, f, cs, nf);
+    // v6.3.5: na descriptografia de vídeo, aceitar o novo artefato *_glitch.mp4
+    // (átomo 'MART'): extrai o AVI scrambled para um tmp e processa como AVI.
+    char tmpmp4[2048];
+    const char* fip_real = fip;
+    if (acao == 2 && sub_modo == 4 && desempacotar_glitch_mp4(fip, tmpmp4, sizeof tmpmp4)) fip_real = tmpmp4;
+    processar_binario_core(fip_real, fop, acao, sub_modo, tipo, f, cs, nf);
+    if (fip_real != fip) unlink(tmpmp4);
 }
 
 void executar_transmutacao_cli(const char* fip, const char* fop, int acao, int sub_modo, int tipo_const, const char* formula, long* cs, int nf) {
@@ -815,5 +993,10 @@ void executar_transmutacao_cli(const char* fip, const char* fop, int acao, int s
     long* copia = malloc(nf * sizeof(long));
     if (!copia) return;
     memcpy(copia, cs, nf * sizeof(long));
-    processar_binario_core(fip, fop, acao, sub_modo, tipo_const, formula, copia, nf);
+    // v6.3.5: descriptografia de vídeo também abri o artefato *_glitch.mp4.
+    char tmpmp4[2048];
+    const char* fip_real = fip;
+    if (acao == 2 && sub_modo == 4 && desempacotar_glitch_mp4(fip, tmpmp4, sizeof tmpmp4)) fip_real = tmpmp4;
+    processar_binario_core(fip_real, fop, acao, sub_modo, tipo_const, formula, copia, nf);
+    if (fip_real != fip) unlink(tmpmp4);
 }
