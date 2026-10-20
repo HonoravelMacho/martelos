@@ -186,4 +186,26 @@ Distribuído sob a **Apache Software License 2.0**.
 
 O M.A.R.T.E.L.O.S. é focado em **Segurança de Resistência**. Assume-se que o operador não confia em infraestruturas centralizadas e utiliza a matemática imutável do universo como escudo definitivo.
 
+## 🏛️ Filosofia: A Cifra Exposta — Quiasmos, Parábolas e o Oceano de Cantor
+
+### O quiasmo: ensinar ocultando, ocultar revelando
+Um **quiasmo** é uma estrutura em espelho (A-B-C-C-B-A) — organização que esconde a ordem dentro de si para quem não sabe olhar, e a revela para quem tem a chave de leitura. As Escrituras falam por quiasmos: **Apocalipse**, **Daniel**, **Lamentações de Jeremias** e outros são construídos em espelhos literários que atravessam milênios sem serem percebidos por quem lê a seco. Jesus ensinava por **parábolas** — e quando perguntaram por que Ele falava assim, respondeu citando **Isaías 6:9-10**: *"Vendo, não veem; ouvindo, não entendem"* (Mateus 13:13-14, Marcos 4:12).
+
+O Martelos é esse princípio transformado em código: **o arquivo criptografado fica em plena luz**. Nada é escondido — o texto embaralhado, o BMP de chiado, o WAV de caos, o AVI cru: tudo exposto, desafiando qualquer um a tentar entender. Mas **só quem tem as chaves e a constante** faz o arquivo voltar a ser o que era. A quem não tem a chave, o conteúdo fala como parábola: visível, contudo ilegível; audível, contudo ruidoso. Não é segurança por obscuridade — é **segurança por soberania**: o segredo não depende do esconderijo, depende da chave.
+
+### O oceano de Cantor
+George Cantor provou que os irracionais são **incontáveis**: há mais números num pedaço da reta real do que em todos os racionais do universo. Os racionais — aquilo que contamos, tabulamos, prevemos — são uma **gota**; o resto é um oceano que nenhuma tabela jamais drenará.
+
+O Martelos bebe do oceano. A esteira numérica (BBP) extraída de π, Catalan, Apery, Clausen, arctan, log3 — ou da **fórmula que você mesmo escrever** — busca o caos justamente no que **não é racional**: dígitos que não se repetem em ciclo, não se tabulam, não acabam. É por isso que cada par *chaves + constante* abre uma cifra diferente: **cada indivíduo do planeta pode ter infinitas criptografias próprias** — todas nascendo da mesma matemática imutável, todas reversíveis, todas suas.
+
+   > *"O infinito dos irracionais é maior que o dos racionais. O Martelos tira o caos do resto do oceano."*
+
+### Cifra em três camadas (o triplo selo)
+1. **A esteira** — milhões de dígitos irracionais: a areia do oceano: possuída por ninguém, visível por todos, decorável por ninguém.
+2. **O quiasmo dinâmico** — seu passo na esteira é definido pela SUA frase (via casa do quiasmo) e pelo PRÓPRIO byte anterior: a rota muda enquanto caminha, como a leitura de uma parábola que muda conforme quem lê.
+3. **A exposição** — o artefato fica público e esteticamente caótico (glitch art real, reversível). Quem tem olhos, vê; quem tem chaves, lê.
+
+### Classificação honesta
+O Martelos é **criptografia experimental**: é arte reversível, não um padrão auditado. Nenhuma cifra aqui promete competir com AES em prova formal — promete outra coisa: **propriedade**. Sua cifra é sua porque nasce da sua frase, da sua constante, da sua fixação pelo infinito. Estude-a, ataque-a, melhore-a — ela é sua.
+
 > *"A matemática é a única língua que ninguém pode proibir."*
