@@ -831,14 +831,32 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         char ruide[2100];
         snprintf(ruide, sizeof ruide, "%s_prensa_ruido.mp4", fip);
         unlink(ruide);
+        // v6.3.6: chiado de VERDADE. Re-codificar o próprio scrambled (160px,
+        // 2 q/s, crf 40) fazia o H.264 liquidificar o ruído: mancha cinza parada.
+        // Agora a faixa vem de ruído sintético (geq random), fps normal e
+        // all-intra (-g 1) para quadro nenhum "herdar" o anterior.
+        double dur = 10.0;
+        {
+            snprintf(cmd, sizeof cmd,
+                     "ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"%s\"",
+                     tmpavi);
+            FILE* pd = POPA_CMD(cmd);
+            if (pd) {
+                char dl[64];
+                if (fgets(dl, sizeof dl, pd)) { double d2 = atof(dl); if (d2 > 0.5) dur = d2; }
+                POPA_FEC(pd);
+            }
+        }
+        if (dur < 1.0) dur = 1.0;
+        if (dur > 7200.0) dur = 7200.0;
         snprintf(cmd, sizeof cmd,
-                 "%s -v error -i \"%s\" -vf \"scale=160:-2,format=yuv420p\" -r 2 -c:v libx264 -crf 40 -preset veryfast -an -y \"%s\"",
-                 FF_PATH, tmpavi, ruide);
+                 "%s -v error -f lavfi -i \"nullsrc=s=320x240,geq=r='random(1)*255':g='random(2)*255':b='random(3)*255'\" -t %.2f -r 12 -c:v libx264 -crf 23 -preset veryfast -g 1 -pix_fmt yuv420p -an -y \"%s\"",
+                 FF_PATH, dur, ruide);
         int ok_ruido = (rodar_ffmpeg(cmd, "chiado assistível") == 0 && access(ruide, F_OK) == 0);
         if (!ok_ruido) {
             snprintf(cmd, sizeof cmd,
-                     "%s -v error -i \"%s\" -vf \"scale=160:-2,format=yuv420p\" -r 2 -c:v mpeg4 -q:v 20 -an -y \"%s\"",
-                     FF_PATH, tmpavi, ruide);
+                     "%s -v error -f lavfi -i \"nullsrc=s=320x240,geq=r='random(1)*255':g='random(2)*255':b='random(3)*255'\" -t %.2f -r 12 -c:v mpeg4 -q:v 5 -g 1 -pix_fmt yuv420p -an -y \"%s\"",
+                     FF_PATH, dur, ruide);
             ok_ruido = (rodar_ffmpeg(cmd, "chiado assistível (mpeg4)") == 0 && access(ruide, F_OK) == 0);
         }
         FILE* fn = ok_ruido ? fopen(ruide, "rb") : NULL;

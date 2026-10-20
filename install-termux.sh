@@ -3,7 +3,7 @@
 # Um único comando instala a versão mais recente do GitHub ou atualiza a antiga:
 #   curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install-termux.sh | bash
 set -e
-VER="6.3.5"
+VER="6.3.6"
 echo "🔨 M.A.R.T.E.L.O.S. v$VER no Termux (instalação/atualização)..."
 pkg update -y
 # CORREÇÃO v6.3.3: o pacote Termux chama-se "libgmp" (o antigo "gmp" não existe
