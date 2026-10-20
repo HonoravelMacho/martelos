@@ -431,8 +431,9 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         } else if (sub_modo == 4) { // Vídeo -> AVI RAW (CHIADO CINZA)
             if (!validar_entrada_video(fip)) { free(cs); return; }
             snprintf(f_tmp, 2048, "%s_prensa.avi", fip); h_size = 10240; t_size_prot = 512000;
-            // -pix_fmt bgr24 explícito: sem ele o rawvideo falha no ffmpeg 5+ / Termux ffmpeg 8.
-            sprintf(cmd, "%s -v error -i \"%s\" -y -pix_fmt bgr24 -vcodec rawvideo -acodec pcm_s16le -f avi \"%s\"", FF_PATH, fip, f_tmp);
+            // -vf format=bgr24 (em vez de -pix_fmt), no mesmo estilo da rota de imagem:
+            // garante o chiado CINZA em ffmpeg 4..8, Termux e desktop.
+            sprintf(cmd, "%s -v error -i \"%s\" -y -vf format=bgr24 -vcodec rawvideo -acodec pcm_s16le -f avi \"%s\"", FF_PATH, fip, f_tmp);
             if (rodar_ffmpeg(cmd, "vídeo -> AVI raw") != 0) { free(cs); return; }
         }
     } else {
