@@ -10,7 +10,7 @@ void banner() {
 
 void exibir_documentacao_flags() {
     printf("\n===================================================================");
-    printf("\n                  📖 MANUAL DE OPERACAO CLI (v6.3.6)");
+    printf("\n                  📖 MANUAL DE OPERACAO CLI (v6.3.7)");
     printf("\n===================================================================");
     printf("\n SINTAXE: ./martelos [acao] [alvo] [arquivo/texto] [parametros]");
     printf("\n\n OPERACOES:");
@@ -58,7 +58,7 @@ void processar_flags(int argc, char** argv) {
         else if (strcmp(argv[i], "-s") == 0) { alvo = 1; i++; char* s = extrair_cerquilha(&i, argc, argv); if(s) strcpy(entrada, s); }
         else if (strcmp(argv[i], "-i") == 0) { alvo = 2; i++; if(i < argc) { strcpy(entrada, argv[i]); sprintf(fop, "%s_glitch.bmp", entrada); } }
         else if (strcmp(argv[i], "-a") == 0) { alvo = 3; i++; if(i < argc) { strcpy(entrada, argv[i]); sprintf(fop, "%s_glitch.wav", entrada); } }
-        else if (strcmp(argv[i], "-v") == 0) { alvo = 4; i++; if(i < argc) { strcpy(entrada, argv[i]); sprintf(fop, "%s_glitch.mp4", entrada); } }
+        else if (strcmp(argv[i], "-v") == 0) { alvo = 4; i++; if(i < argc) { strcpy(entrada, argv[i]); sprintf(fop, "%s_glitch.avi", entrada); } }
         else if (strcmp(argv[i], "-m") == 0) { alvo = 5; i++; if(i < argc) { strcpy(entrada, argv[i]); sprintf(fop, "%s.martelos", entrada); } }
         else if (strcmp(argv[i], "-k") == 0) {
             i++; if(i < argc) { n_layers = atoi(argv[i]); if (n_layers > 0) { chaves = malloc(n_layers * sizeof(long));
