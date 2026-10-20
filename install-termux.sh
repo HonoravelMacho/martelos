@@ -3,7 +3,8 @@
 # Um único comando instala a versão mais recente do GitHub ou atualiza a antiga:
 #   curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install-termux.sh | bash
 set -e
-echo "🔨 M.A.R.T.E.L.O.S. v6.3.4 no Termux (instalação/atualização)..."
+VER="6.3.4"
+echo "🔨 M.A.R.T.E.L.O.S. v$VER no Termux (instalação/atualização)..."
 pkg update -y
 # CORREÇÃO v6.3.3: o pacote Termux chama-se "libgmp" (o antigo "gmp" não existe
 # e quebrava o instalador) e o ffprobe vem junto com o pacote "ffmpeg".
