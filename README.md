@@ -2,7 +2,7 @@
 **Motor Algébrico Ruptivo Transformacional Experimental Livre e Open Source**
 
 ![Status](https://img.shields.io/badge/Status-Estável-green)
-![Versão](https://img.shields.io/badge/Versão-v6.3.3-blue)
+![Versão](https://img.shields.io/badge/Versão-v6.3.7-blue)
 ![Licença](https://img.shields.io/badge/Licença-Apache%202.0-yellow)
 
 M.A.R.T.E.L.O.S. é um manifesto técnico pela **Soberania Algébrica**. Em um mundo de vigilância constante, o projeto foca em segurança **Off-Grid**, autonomia total e na entropia pura extraída de constantes transcendentais do universo.
@@ -15,6 +15,25 @@ O script de instalação detecta automaticamente seu sistema, instala as depend�
 
 ### 🐧 Linux (Ubuntu/Debian/Pop_OS)
 `curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install.sh | bash`
+Outras distros: use o pacote `.deb`/`.rpm` ou o tarball estático da [página de Releases](https://github.com/HonoravelMacho/martelos/releases).
+
+### 🍎 macOS (via Homebrew)
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"  # só na 1ª vez, se não tiver o brew
+curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install.sh | bash
+```
+O instalador detecta o macOS, instala `gmp` e `ffmpeg` pelo brew e compila com clang. Requer `ffmpeg` no PATH para mídia (o instalador cuida disso).
+
+### 🪟 Windows (dois caminhos)
+**Caminho 1 — Binário pronto:** baixe o `martelos-*.exe` na [página de Releases](https://github.com/HonoravelMacho/martelos/releases) e deixe-o numa pasta do PATH. Para criptografar mídia, instale o **ffmpeg** (ex.: winget: `winget install ffmpeg`, ou baixe em ffmpeg.org), o martelos usa o `ffmpeg` e `ffprobe` do PATH.
+
+**Caminho 2 — Compilar (MSYS2, [msys2.org](https://www.msys2.org)):**
+```bash
+pacman -S --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-gmp mingw-w64-x86_64-ffmpeg git
+git clone https://github.com/HonoravelMacho/martelos.git
+cd martelos
+gcc -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos.exe -lgmp -lm
+```
 
 ### 📱 Android (Termux) — 3 caminhos, do mais fácil ao manual
 
@@ -42,7 +61,7 @@ cp martelos $PREFIX/bin/ && chmod +x $PREFIX/bin/martelos
 ```
 > **Nota v6.3.3 (Termux):** o pacote correto é `libgmp` (o antigo `gmp` não existe e quebrava a instalação). O `ffprobe` já vem junto com o pacote `ffmpeg`. Se a mídia falhar, rode `ffmpeg -version` e `ffprobe -version` para conferir; o martelos agora mostra o log real do ffmpeg em vez de um erro genérico. O log usa `$TMPDIR` (`$PREFIX/tmp` no Termux) porque o `/tmp` do Android não tem escrita.
 
-> **Nota v6.3.7 (vídeo, todos os sistemas): voltou a PUREZA.** O VÍDEO criptografado é **`*_glitch.avi` cru** — a cifra visível (quadros cinza embaralhados + áudio cru), como no `.bmp` e no `.wav`. **Aviso honesto:** no PC (VLC desktop) o caos aparece perfeito; no VLC Android esses AVIs sem compressão podem exibir avermelhado/preto — limitação do player móvel, não da criptografia (em estudo pela próxima IA). Na descriptografia o martelos restaura e converte o vídeo para `*_fix.mp4` (H.264 + yuv420p) — cor correta em qualquer player — e ainda aceita descriptografar os `*_glitch.mp4` do legado 6.3.5/6.3.6. Para diagnosticar no Termux: `curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/teste-cor-video.sh | bash`
+> **Nota v6.3.7 (vídeo, todos os sistemas): voltou a PUREZA.** O VÍDEO criptografado é **`*_glitch.avi` cru** — a cifra visível (quadros cinza embaralhados + áudio cru), como no `.bmp` e no `.wav`. **Aviso honesto:** no PC o caos aparece perfeito; alguns players móveis exibem esses AVIs sem compressão avermelhado/preto — ** teste players alternativos da Play Store: executam o `*_glitch.avi` perfeitamente (comprovado)**; o VLC Android é a exceção conhecida (limitação dele, não da criptografia). Na descriptografia o martelos restaura e converte o vídeo para `*_fix.mp4` (H.264 + yuv420p) — cor correta em qualquer player — e ainda aceita descriptografar os `*_glitch.mp4` do legado 6.3.5/6.3.6. Para diagnosticar no Termux: `curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/teste-cor-video.sh | bash`
 
 **Pré-requisito (só na 1ª vez):** autorize o acesso à memória com `termux-setup-storage`.
 
@@ -66,7 +85,7 @@ No modo CLI (Flags), os arquivos são processados na pasta local `./` onde o ter
 | `-s` | Alvo: **String/Texto** (Envolva em "#...#") |
 | `-i` | Alvo: **Imagem** (Transmuta para .bmp) |
 | `-a` | Alvo: **Áudio** (Transmuta para .wav) |
-| `-v` | Alvo: **Vídeo** (Transmuta para AVI Raw - Chiado v2.7) |
+| `-v` | Alvo: **Vídeo** (Transmuta para AVI cru caótico: `*_glitch.avi`) |
 | `-m` | Alvo: **Qualquer arquivo** (gera `.martelos` com extensão guardada) |
 | `-o` | **Saída**: Nome do arquivo gerado (padrão: `*_glitch.*`) |
 | `-save` | Salvar resultado de texto em `.txt` |

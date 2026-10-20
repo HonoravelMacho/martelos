@@ -8,13 +8,20 @@ if [ -d "/data/data/com.termux/files/usr/bin" ] || [ -n "$TERMUX_VERSION" ]; the
     PKG_MGR="pkg install -y"
     SUDO=""
 else
-    OS="Linux-Desktop"
-    BIN_DIR="/usr/local/bin"
-    PKG_MGR="sudo apt install -y"
-    SUDO="sudo"
+    if [ "$(uname -s)" = "Darwin" ]; then
+        OS="macOS"
+        BIN_DIR="/usr/local/bin"
+        PKG_MGR="brew install"
+        SUDO="sudo"
+    else
+        OS="Linux-Desktop"
+        BIN_DIR="/usr/local/bin"
+        PKG_MGR="sudo apt install -y"
+        SUDO="sudo"
+    fi
 fi
 
-echo "🔨 Instalando M.A.R.T.E.L.O.S. v6.3.3 no $OS..."
+echo "🔨 Instalando M.A.R.T.E.L.O.S. v6.3.7 no $OS..."
 
 # 2. Instalação de Dependências
 # CORREÇÃO v6.3.3: no Termux o pacote é "libgmp" (não "gmp") e o ffprobe
@@ -22,6 +29,10 @@ echo "🔨 Instalando M.A.R.T.E.L.O.S. v6.3.3 no $OS..."
 if [ "$OS" = "Linux-Desktop" ]; then
     sudo apt update
     $PKG_MGR libgmp-dev cmake build-essential git ffmpeg
+elif [ "$OS" = "macOS" ]; then
+    command -v brew >/dev/null || { echo "[❌] Homebrew ausente. Instale primeiro: https://brew.sh"; exit 1; }
+    brew install gmp ffmpeg
+    GMP_PREFIX="$(brew --prefix gmp)"
 else
     pkg update -y
     $PKG_MGR libgmp clang git ffmpeg
@@ -31,7 +42,11 @@ fi
 
 # 3. Compilação de Alta Performance
 echo "⚙️ Compilando Motor Algébrico..."
-gcc -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm || clang -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm
+if [ "$OS" = "macOS" ]; then
+    clang -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -I"$GMP_PREFIX/include" -L"$GMP_PREFIX/lib" -lgmp -lm
+else
+    gcc -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm || clang -O3 main.c alfabeto.c motor.c io.c crypto.c parser.c binario.c -o martelos -lgmp -lm
+fi
 
 # 4. Instalação Global
 echo "🚀 Movendo binário para $BIN_DIR..."
@@ -60,10 +75,10 @@ $SUDO cp martelos-icon-48.png /usr/share/icons/hicolor/48x48/mimetypes/applicati
 $SUDO update-mime-database /usr/share/mime
 $SUDO gtk-update-icon-cache -f /usr/share/icons/hicolor > /dev/null 2>&1 || true
 else
-echo "ℹ️ Termux: registro de ícone/MIME ignorado (sem /usr/share no Android)."
+echo "ℹ️ $( [ "$OS" = "macOS" ] && echo 'macOS' || echo 'Termux' ): registro de ícone/MIME ignorado."
 fi
 
 echo "================================================="
-echo "✅ M.A.R.T.E.L.O.S. v6.3.3 INSTALADO COM SUCESSO!"
+echo "✅ M.A.R.T.E.L.O.S. v6.3.7 INSTALADO COM SUCESSO!"
 echo "Operação transparente: Downloads/martelos ativa."
 echo "================================================="
