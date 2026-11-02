@@ -4,13 +4,21 @@
 
 void lb() { int c; while ((c = getchar()) != '\n' && c != EOF); }
 
+// v7.1.1: flush SÓ quando a linha não fechou dentro do fgets — antes, chamar
+// lb() após fgets que já consumiu o '\n' engolia A LINHA SEGUINTE (a senha
+// digitada logo depois, no prompt Protocolo/CHAVE).
+static void flush_restantes(const char* ln) {
+    size_t L = strlen(ln);
+    if (L == 0 || ln[L - 1] != '\n') lb();
+}
+
 void banner() {
-    printf("\n===================================================================\n                   🔨 Projeto M.A.R.T.E.L.O.S.  \n   \"Motor Algébrico Ruptivo Transformacional Experimental\"\n              \"Livre e Open Source\" (v7.1.0 — Protocolo Salto Quântico)\n===================================================================\n");
+    printf("\n===================================================================\n                   🔨 Projeto M.A.R.T.E.L.O.S.  \n   \"Motor Algébrico Ruptivo Transformacional Experimental\"\n              \"Livre e Open Source\" (v7.1.1 — Protocolo Salto Quântico)\n===================================================================\n");
 }
 
 void exibir_documentacao_flags() {
     printf("\n===================================================================");
-    printf("\n                  📖 MANUAL DE OPERACAO CLI (v7.1.0)");
+    printf("\n                  📖 MANUAL DE OPERACAO CLI (v7.1.1)");
     printf("\n===================================================================");
     printf("\n SINTAXE: ./martelos [acao] [alvo] [arquivo/texto] [parametros]");
     printf("\n\n OPERACOES:");
@@ -218,6 +226,7 @@ static char* arma_legado_decifrar(const char* t, mpz_t* casas, int n, int tipo, 
 }
 
 int menu_constantes(int *tipo, char *formula) {
+    clearerr(stdin); // v7.1.1
     printf("\n--- CONSTANTES BBP ---\n1-Pi | 2-Catalan | 3-Apery | 4-Clausen | 5-Arctan | 6-Log3 | 7-Custom\n0-Voltar: ");
     char op[10]; if(!fgets(op, 10, stdin)) return 0; int s = atoi(op);
     if (s == 0) return 0;
@@ -231,20 +240,22 @@ int main(int argc, char** argv) {
     char op[10];
     while (1) {
         banner(); printf("1 - Modo Texto\n2 - Modo Arquivos\n3 - Documentação Flags\n0 - Sair\nEscolha: ");
+        clearerr(stdin); // v7.1.1: stdin sem rancor — nenhum EOF velho trava a leitura
         if (!fgets(op, 10, stdin)) break;
         int p = atoi(op); if (p == 0) break;
         if (p == 3) { exibir_documentacao_flags(); printf("\nPressione Enter..."); getchar(); continue; }
         if (p == 1) {
             int t; char f[256]; if (!menu_constantes(&t, f)) continue;
-            printf("1-Cripto | 2-Decripto | 0-Voltar: "); char* la = fgets(op, 10, stdin); if (!la) break;
+            printf("1-Cripto | 2-Decripto | 0-Voltar: "); clearerr(stdin); char* la = fgets(op, 10, stdin); if (!la) break;
             int a = atoi(la); if (a == 0) continue;
             char* txt = ler_texto_ctrl_d("ENTRADA:"); if(strcmp(txt,"0")==0){ free(txt); continue; }
+            clearerr(stdin);
             printf("Camadas? "); int nl = 0; IGNORE_RET(scanf("%d", &nl)); lb(); if(nl<=0) nl=1;
+            clearerr(stdin); // v7.1.1: levanta se o usuário não digitou número nenhum
             int legado_txt = 0;
             if (a == 2) {
-                printf("Protocolo: 1-Salto Quântico (v7) | 2-Legado (v6) [Enter=1]: ");
-                char pr[10]; if (fgets(pr, 10, stdin)) legado_txt = (atoi(pr) == 2);
-                lb();
+                printf("Protocolo — [Enter] Salto Quântico (v7) | 2-Legado (v6): ");
+                char pr[10]; if (fgets(pr, 10, stdin)) { legado_txt = (atoi(pr) == 2); flush_restantes(pr); }
             }
             char* res = NULL; int selo_st = 0;
             if (legado_txt) {
@@ -265,19 +276,18 @@ int main(int argc, char** argv) {
                     else printf("[🕰] Sem selo na entrada — v6 (re-escolha 'Legado') ou cópia mutilada; confira o resultado.\n");
                 }
             }
-            printf("Salvar (s/n)? "); char so; if(scanf(" %c", &so)==1 && (so=='s'||so=='S')){ char nm[100]; printf("Nome: "); IGNORE_RET(scanf("%99s",nm)); salvar_em_arquivo(nm,res); }
+            printf("Salvar (s/n)? "); clearerr(stdin); char so; if(scanf(" %c", &so)==1 && (so=='s'||so=='S')){ char nm[100]; printf("Nome: "); IGNORE_RET(scanf("%99s",nm)); salvar_em_arquivo(nm,res); }
             free(txt); free(res); lb();
         } else if (p == 2) {
-            printf("\n--- MODO MULTIMIDIA ---\n1-Martelos | 2-Imagens | 3-Audios | 4-Videos | 0-Voltar: "); char* ls = fgets(op, 10, stdin); if (!ls) break;
+            printf("\n--- MODO MULTIMIDIA ---\n1-Martelos | 2-Imagens | 3-Audios | 4-Videos | 0-Voltar: "); clearerr(stdin); char* ls = fgets(op, 10, stdin); if (!ls) break;
             int sub = atoi(ls); if (sub == 0) continue;
-            printf("1-Cripto | 2-Decripto | 0-Voltar: "); char* la = fgets(op, 10, stdin); if (!la) break;
+            printf("1-Cripto | 2-Decripto | 0-Voltar: "); clearerr(stdin); char* la = fgets(op, 10, stdin); if (!la) break;
             int a = atoi(la); if (a == 0) continue;
             int t; char f[256]; if (!menu_constantes(&t, f)) continue;
             int legado_media = 0, auto_map = 0;
             if (a == 2) {
-                printf("Protocolo das chaves: 1-Salto Quântico (v7) | 2-Legado (v6) [Enter=1]: ");
-                char pr[10]; if (fgets(pr, 10, stdin)) legado_media = (atoi(pr) == 2);
-                lb();
+                printf("Protocolo das chaves — [Enter] Salto Quântico (v7) | 2-Legado (v6): ");
+                char pr[10]; if (fgets(pr, 10, stdin)) { legado_media = (atoi(pr) == 2); flush_restantes(pr); }
                 if (sub == 1 && legado_media == 0) auto_map = 1; // .martelos detecta sozinho pelo cabeçalho
             }
             processar_arquivo_binario_n_camadas(t, f, a, sub, auto_map ? -1 : legado_media);

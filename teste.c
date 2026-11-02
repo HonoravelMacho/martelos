@@ -104,7 +104,7 @@ static void teste_roundtrip(const char* ent, mpz_t* casas, int n, const char* ta
 }
 
 int main(void) {
-    printf("====== CONTRATO v7.1.0 — SALTO QUÂNTICO + MALHA UTF-8 ======\n");
+    printf("====== CONTRATO v7.1.1 — SALTO QUÂNTICO + MALHA UTF-8 ======\n");
 
     // ------------------------------------------------------------------ 1
     printf("\n[1] Oceano (esteira)\n");

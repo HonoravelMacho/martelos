@@ -6,6 +6,7 @@
 #endif
 
 char* ler_texto_ctrl_d(const char* instrucao) {
+    clearerr(stdin); // v7.1.1: nem um EOF velho trai a leitura seguinte
     printf("%s\n(Ctrl+D para finalizar ou '0' para cancelar)\n---\n", instrucao);
     size_t cap = 2048, tam = 0; char* buf = malloc(cap); int c;
     while ((c = getchar()) != EOF) { 

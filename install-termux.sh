@@ -3,7 +3,7 @@
 # Um único comando instala a versão mais recente do GitHub ou atualiza a antiga:
 #   curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install-termux.sh | bash
 set -e
-VER="7.1.0"
+VER="7.1.1"
 echo "🔨 M.A.R.T.E.L.O.S. v$VER (Protocolo Salto Quântico) no Termux (instalação/atualização)..."
 pkg update -y
 # CORREÇÃO v7.0.0: atualizar TODOS os pacotes ANTES. O ffmpeg do Termux exige

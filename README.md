@@ -103,6 +103,8 @@ A cifra v7 usa **todas as 95 teclas ASCII printáveis, em ordem de código**: es
 ### A Malha UTF-8 (v7.1) — a descriptografia é uma fotografia byte a byte
 Tudo que está **fora da fonte 95** (acento multibyte, quebra de linha, tab, emoji) viaja como trio de glifos da própria fonte — `=` + dois hexadecimais (quoted-printable): `é` → `=C3=A9`, quebra de linha → `=0A`, `=` → `=3D`. A decodificação é **canônica** (decodifica, re-encoda e compara): textos antigos abrem como sempre, e **cada palavra com acento e cada `\n` da entrada voltam de pé na decifra** — nada é mais transliterado nem achatado em linha única. A fonte continua 95; a memória, ilimitada.
 
+> **No menu (Modo Texto → Decripto):** o prompt `Protocolo — [Enter] Salto Quântico (v7) | 2-Legado (v6)` pergunta só a ÉPOCA da cifra — **Enter basta** para textos cifrados agora; `2` abre textos da era v6. Em v7.1.1: digitar qualquer coisa não-`2` ali **não come mais a senha** da CHAVE.
+
 ### A casa literal — a ordem é sagrada
 A frase-chave vira um **número literal em base 95** (posicional, via aritmética de precisão arbitrária GMP): `casa("ab") = 6337`, `casa("ba") = 6431` — **AB ≠ BA**. Um soneto vira um número gigantesco, **sem cap** — e a esteira é dimensionada pela *mensagem*, nunca pela casa, então o π não infla mais.
 
