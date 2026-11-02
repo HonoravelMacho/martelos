@@ -3,13 +3,19 @@
 # Um único comando instala a versão mais recente do GitHub ou atualiza a antiga:
 #   curl -sSL https://raw.githubusercontent.com/HonoravelMacho/martelos/main/install-termux.sh | bash
 set -e
-VER="6.3.7"
-echo "🔨 M.A.R.T.E.L.O.S. v$VER no Termux (instalação/atualização)..."
+VER="7.0.0"
+echo "🔨 M.A.R.T.E.L.O.S. v$VER (Protocolo Salto Quântico) no Termux (instalação/atualização)..."
 pkg update -y
+# CORREÇÃO v7.0.0: atualizar TODOS os pacotes ANTES. O ffmpeg do Termux exige
+# bibliotecas coerentes entre si (ex.: a nova libplacebo.so.387). Com um
+# ffmpeg "meio configurado" (dpkg "not fully installed"), o pkg install
+# abortava com "CANNOT LINK EXECUTABLE" + dpkg error 1 antes do clone.
+# Este é o remédio que o próprio Termux recomenda: `pkg upgrade`.
+pkg upgrade -y || true
 # CORREÇÃO v6.3.3: o pacote Termux chama-se "libgmp" (o antigo "gmp" não existe
 # e quebrava o instalador) e o ffprobe vem junto com o pacote "ffmpeg".
-pkg install -y clang libgmp ffmpeg git
-command -v ffmpeg >/dev/null || { echo "[❌] ffmpeg não instalado. Rode: pkg install -y ffmpeg"; exit 1; }
+pkg install -y clang libgmp ffmpeg git || { dpkg --configure -a || true; pkg install -y clang libgmp ffmpeg git; }
+command -v ffmpeg >/dev/null || { echo "[❌] ffmpeg não instalou. O Termux recomenda: pkg upgrade (atualiza TODOS os pacotes). Depois rode o comando de instalação de novo."; exit 1; }
 command -v ffprobe >/dev/null && echo "✅ ffprobe OK (validação de mídia completa)." || echo "⚠️ ffprobe ausente — o martelos usará validação simplificada via ffmpeg."
 ffmpeg -version | head -n 1
 cd ~
