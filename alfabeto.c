@@ -98,3 +98,66 @@ char* normalizar_fonte95(const char* texto) {
         }
     } res[r] = '\0'; return res;
 }
+
+// ============================================================================
+// MALHA UTF-8 (v7.1) — a memória byte a byte da decifra.
+// A fonte continua 95 (cópia honesta da tela), mas nenhum byte se perde:
+// tudo que está FORA da fonte (acento multibyte, quebra de linha, tab,
+// controle > 0x7E) viaja como TRIO de glifos da própria fonte — '=' + dois
+// hexadecimais MAIÚSCULOS (quoted-printable, RFC 2045):
+//   'é' (=C3=A9 em bytes) -> "=C3=A9"   '\n' -> "=0A"   '=' -> "=3D"
+// A decodificação é CANÔNICA: decodifica, re-encoda e só aceita a leitura
+// escaped se re-encodar reproduzir a corda original byte a byte. Textos
+// escritos à mão que por acaso contenham "=XX" voltam LITERAIS — sem
+// ambiguidade, sem perda. (Limitação honesta herdada do v7.0.0: um texto
+// antigo contendo LITERALMENTE "=3D" é lido como '='. Corrige recifrando.)
+// ============================================================================
+static int malha_hexval(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+char* malha_utf8_encode(const char* brutos) {
+    long L = strlen(brutos);
+    char* r = malloc((size_t)L * 3 + 4); // pior caso: todo byte vira 3 glifos
+    if (!r) return NULL;
+    static const char HEX[] = "0123456789ABCDEF";
+    long o = 0;
+    for (long i = 0; i < L; i++) {
+        unsigned char b = (unsigned char)brutos[i];
+        if (b == '=') { r[o++] = '='; r[o++] = '3'; r[o++] = 'D'; }
+        else if (b >= 0x20 && b <= 0x7E) r[o++] = (char)b; // dentro da fonte: passa
+        else { r[o++] = '='; r[o++] = HEX[b >> 4]; r[o++] = HEX[b & 0x0F]; }
+    }
+    r[o] = '\0'; return r;
+}
+
+char* malha_utf8_decode(const char* s) {
+    long L = strlen(s);
+    char* dec = malloc((size_t)L + 2);
+    if (!dec) return NULL;
+    long o = 0;
+    for (long i = 0; i < L; ) {
+        if (s[i] == '=' && i + 2 < L) {
+            int h1 = malha_hexval(s[i + 1]), h2 = malha_hexval(s[i + 2]);
+            if (h1 >= 0 && h2 >= 0) { // escape legítimo: 3 glifos -> UM byte
+                dec[o++] = (char)(h1 * 16 + h2); i += 3; continue;
+            }
+        }
+        dec[o++] = s[i]; i++; // '=' solitário ou sem par hex: literal
+    }
+    dec[o] = '\0';
+    // CANÔNICO: decodifica -> re-encoda -> compara. Só aceita a leitura
+    // escaped quando o ciclo fecha; senão devolve a corda como veio.
+    char* re = malha_utf8_encode(dec);
+    if (re && strcmp(re, s) != 0) {
+        // roundtrip não fecha: texto cru (v7.0.0 anterior, ou '=XX' à mão)
+        free(re); free(dec);
+        char* literal = malloc((size_t)L + 1);
+        if (literal) { memcpy(literal, s, (size_t)L + 1); }
+        return literal;
+    }
+    free(re);
+    return dec; // byte a byte — o acento e a quebra de linha voltam de pé
+}

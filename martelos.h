@@ -19,8 +19,9 @@
 //    código (espaço=1 … '!'=2 … 'A'=34 … 'a'=66 … 'z'=91 … '~'=95).
 //    Minúsculas, dígitos 0-9 e TODA a pontuação têm valor próprio: o balde
 //    do '-' da v6 (todo desconhecido igual) morre.
-//    '\n' sai da fonte (entra como espaço): a letra cifrada nunca contém
-//    quebra de linha, então copiar da tela fica honesto.
+//    '\n' saiu da fonte, mas VIAJA na malha UTF-8 ("=0A"): a letra cifrada
+//    nunca contém quebra de linha, a cópia da tela fica honesta, e a
+//    decifra devolve a entrada BYTE A BYTE — com acentos de pé (v7.1).
 // ============================================================================
 
 // Fonte legada (sinal vivo do passado — decifra somente)
@@ -40,6 +41,15 @@ char* remover_acentos_e_upper(const char* texto); // normalização da v6 (tudo 
 int fonte95_para_num(char c);
 char fonte95_num_para_char(int num);
 char* normalizar_fonte95(const char* texto); // translitera acentos mantendo caixa; controle -> espaço
+
+// Malha UTF-8 (v7.1): memória byte a byte — acentos e quebras de linha
+// sobrevivem ao salto. Todo byte fora da fonte 95 viaja como trio de glifos
+// da própria fonte ('=' + 2 hex maiúsculos): 'é' -> "=C3=A9", '\n' -> "=0A",
+// '=' -> "=3D". A decodificação é CANÔNICA: decodifica, re-encoda, compara —
+// só aceita a leitura escaped quando o ciclo fecha byte a byte (senão, dá
+// a corda de volta como veio; zero ambiguidade com texto escrito à mão).
+char* malha_utf8_encode(const char* brutos);
+char* malha_utf8_decode(const char* s);
 
 // Funções de Texto e I/O
 char* ler_texto_ctrl_d(const char* instrucao);

@@ -2,7 +2,7 @@
 **Motor Algébrico Ruptivo Transformacional Experimental Livre e Open Source**
 
 ![Status](https://img.shields.io/badge/Status-Estável-green)
-![Versão](https://img.shields.io/badge/Versão-v7.0.0%20%22Protocolo%20Salto%20Quântico%22-blue)
+![Versão](https://img.shields.io/badge/Versão-v7.1.0%20%22Protocolo%20Salto%20Quântico%22-blue)
 ![Licença](https://img.shields.io/badge/Licença-Apache%202.0-yellow)
 
 M.A.R.T.E.L.O.S. é um manifesto técnico pela **Soberania Algébrica**. Em um mundo de vigilância constante, o projeto foca em segurança **Off-Grid**, autonomia total e na entropia pura extraída de constantes transcendentais do universo.
@@ -95,10 +95,13 @@ No modo CLI (Flags), os arquivos são processados na pasta local `./` onde o ter
 | `-f` | **Fórmula**: Constante (pi, catalan, etc) ou fórmula customizada |
 | `-legado` | Decifrar com as chaves da **v6** (soma antiga) — nada é re-cifrado |
 
-## 🌀 Protocolo Salto Quântico (v7.0.0)
+## 🌀 Protocolo Salto Quântico (v7.1.0)
 
 ### A fonte 95 — o teclado inteiro
-A cifra v7 usa **todas as 95 teclas ASCII printáveis, em ordem de código**: espaço=1, `!=2`, `0=17`‑`9=26`, `A=34`‑`Z=59`, `a=66`‑`z=91`, `~=95`. Minúsculas, dígitos e **toda a pontuação** têm valor próprio — o balde da v6 (onde todo desconhecido virava `-`) é aposentado. **Exceção:** `\n` saiu da fonte (entra como espaço), então **a letra cifrada nunca contém quebra de linha** — copiar da tela fica honesto.
+A cifra v7 usa **todas as 95 teclas ASCII printáveis, em ordem de código**: espaço=1, `!=2`, `0=17`‑`9=26`, `A=34`‑`Z=59`, `a=66`‑`z=91`, `~=95`. Minúsculas, dígitos e **toda a pontuação** têm valor próprio — o balde da v6 (onde todo desconhecido virava `-`) é aposentado. **Exceção:** `\n` saiu da fonte, então **a letra cifrada nunca contém quebra de linha** — copiar da tela fica honesto.
+
+### A Malha UTF-8 (v7.1) — a descriptografia é uma fotografia byte a byte
+Tudo que está **fora da fonte 95** (acento multibyte, quebra de linha, tab, emoji) viaja como trio de glifos da própria fonte — `=` + dois hexadecimais (quoted-printable): `é` → `=C3=A9`, quebra de linha → `=0A`, `=` → `=3D`. A decodificação é **canônica** (decodifica, re-encoda e compara): textos antigos abrem como sempre, e **cada palavra com acento e cada `\n` da entrada voltam de pé na decifra** — nada é mais transliterado nem achatado em linha única. A fonte continua 95; a memória, ilimitada.
 
 ### A casa literal — a ordem é sagrada
 A frase-chave vira um **número literal em base 95** (posicional, via aritmética de precisão arbitrária GMP): `casa("ab") = 6337`, `casa("ba") = 6431` — **AB ≠ BA**. Um soneto vira um número gigantesco, **sem cap** — e a esteira é dimensionada pela *mensagem*, nunca pela casa, então o π não infla mais.

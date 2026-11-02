@@ -4,7 +4,7 @@
 #include <string.h>
 
 // ============================================================================
-// CONTRATO EXECUTÁVEL v7.0.0 — PROTOCOLO SALTO QUÂNTICO
+// CONTRATO EXECUTÁVEL v7.1.0 — SALTO QUÂNTICO + MALHA UTF-8
 // Os vetores-ouro legados abaixo foram congelados do binário v6 real:
 // se algum conferir mal, é o código que mudou, nunca o ouro.
 // (Antes de cada chamada legada, limpar_cache_esteira() emula um processo
@@ -45,9 +45,30 @@ static mpz_t* casas_de(const char* f1, const char* f2, const char* f3, int* nf) 
     return cs;
 }
 
+// O soneto de Camões — o caso REAL do Capitão no Termux (a v7.0.0 dispentava
+// os acentos e engolia as quebras). Será a testemunha permanente da Malha UTF-8.
+static const char* SONETO_CAPITAO =
+    "Amor é fogo que arde sem se ver,\n"
+    "é ferida que dói, e não se sente;\n"
+    "é um contentamento descontente,\n"
+    "é dor que desatina sem doer.\n"
+    "\n"
+    "É um não querer mais que bem querer;\n"
+    "é um andar solitário entre a gente;\n"
+    "é nunca contentar-se de contente;\n"
+    "é um cuidar que ganha em se perder.\n"
+    "\n"
+    "É querer estar preso por vontade;\n"
+    "é servir a quem vence, o vencedor;\n"
+    "é ter com quem nos mata, lealdade.\n"
+    "\n"
+    "Mas como causar pode seu favor\n"
+    "nos corações humanos amizade,\n"
+    "se tão contrário a si é o mesmo Amor";
+
 static void teste_roundtrip(const char* ent, mpz_t* casas, int n, const char* tag) {
-    char* norm = normalizar_fonte95(ent);
-    size_t mn = strlen(norm);
+    char* malha = malha_utf8_encode(ent);
+    size_t mn = strlen(malha);
     char nome[128];
 
     if (mn == 0) { // texto vazio: nada a selar, volta vazio
@@ -59,7 +80,7 @@ static void teste_roundtrip(const char* ent, mpz_t* casas, int n, const char* ta
         char* plano = decifrar_salto(cifra, casas, n, 1, NULL, &selo2);
         snprintf(nome, sizeof nome, "%s: vazio volta vazio", tag);
         checa(strlen(plano) == 0, nome);
-        free(plano); free(cifra); free(norm);
+        free(plano); free(cifra); free(malha);
         return;
     }
 
@@ -67,7 +88,7 @@ static void teste_roundtrip(const char* ent, mpz_t* casas, int n, const char* ta
     char* cifra = cifrar_salto(ent, casas, n, 1, NULL, &selo);
     size_t mc = strlen(cifra);
     snprintf(nome, sizeof nome, "%s: selo marcado na cifra", tag);            checa(selo == 1, nome);
-    snprintf(nome, sizeof nome, "%s: cifra tem tamanho L+2 (%zu = %zu+2)", tag, mc, mn);
+    snprintf(nome, sizeof nome, "%s: cifra tem tamanho malha+2 (%zu = %zu+2)", tag, mc, mn);
     checa(mc == mn + 2, nome);
     int sem_nl = 1; for (size_t i = 0; i < mc; i++) if (cifra[i] == '\n') sem_nl = 0;
     snprintf(nome, sizeof nome, "%s: cifra nunca contém \\n (cópia de terminal honesta)", tag);
@@ -76,14 +97,14 @@ static void teste_roundtrip(const char* ent, mpz_t* casas, int n, const char* ta
     int selo2 = 0;
     char* plano = decifrar_salto(cifra, casas, n, 1, NULL, &selo2);
     snprintf(nome, sizeof nome, "%s: decifra confirma o selo", tag);          checa(selo2 == 1, nome);
-    snprintf(nome, sizeof nome, "%s: roundtrip == normalização (%zu símbolos)", tag, mn);
-    checa_str(plano, norm, nome);
+    snprintf(nome, sizeof nome, "%s: roundtrip BYTE A BYTE (%zu bytes crua)", tag, strlen(ent));
+    checa_str(plano, ent, nome); // a entrada CRUA — acentos e \\n de pé!
 
-    free(plano); free(cifra); free(norm);
+    free(plano); free(cifra); free(malha);
 }
 
 int main(void) {
-    printf("====== CONTRATO v7.0.0 — PROTOCOLO SALTO QUÂNTICO ======\n");
+    printf("====== CONTRATO v7.1.0 — SALTO QUÂNTICO + MALHA UTF-8 ======\n");
 
     // ------------------------------------------------------------------ 1
     printf("\n[1] Oceano (esteira)\n");
@@ -109,6 +130,26 @@ int main(void) {
     char* n = normalizar_fonte95("Árvore ção Índigo Ý Ã 1\t9\n");
     checa_str(n, "Arvore cao Indigo Y A 1 9 ", "acento translitera, caixa preservada, \\t/\\n viram espaço");
     free(n);
+
+    // Malha UTF-8: quem está FORA da fonte viaja; quem está DENTRO fica.
+    {
+        char* m = malha_utf8_encode("dói\n");
+        checa_str(m, "d=C3=B3i=0A", "malha: 'dói\\n' viaja como d=C3=B3i=0A");
+        free(m);
+        m = malha_utf8_encode("a=b");
+        checa_str(m, "a=3Db", "malha: o próprio '=' escapa (=3D)");
+        free(m);
+        checa_str(malha_utf8_decode("a=b41c"), "a=b41c",
+                  "malha canônica: '=b4' à mão (b minúsculo) NÃO é escape → literal");
+        checa_str(malha_utf8_decode("a=41c"), "a=41c",
+                  "malha canônica: '=41' à mão não fecha o ciclo → literal");
+        checa_str(malha_utf8_decode("a=3Db"), "a=b",
+                  "malha canônica: 'a=3Db' é escape legítimo → devolve 'a=b'");
+        char* m2 = malha_utf8_encode("🚀 foco");
+        char* b2 = malha_utf8_decode(m2);
+        checa_str(b2, "🚀 foco", "malha: emoji atravessa o salto byte a byte");
+        free(b2); free(m2);
+    }
 
     // ------------------------------------------------------------------ 3
     printf("\n[3] Casa = número literal (base 95, ordem sagrada)\n");
@@ -153,16 +194,17 @@ int main(void) {
     }
 
     // ------------------------------------------------------------------ 4
-    printf("\n[4] Roundtrips v7 (3 camadas, pi)\n");
+    printf("\n[4] Roundtrips v7.1 byte a byte (3 camadas, pi)\n");
     {
-        char* norm = normalizar_fonte95("Árvore boa! 10 metros, sem (%1) prova\n");
-        printf("  (normalizado vira: \"%s\" — %zu símbolos)\n", norm, strlen(norm));
-        free(norm);
+        char* malha = malha_utf8_encode("Árvore boa! 10 metros, sem (%1) prova\n");
+        printf("  (malha: \"%s\" — %zu símbolos, acentos e \\n de pé)\n", malha, strlen(malha));
+        free(malha);
         int n; mpz_t* cs = casas_de("olho", "ab", "zebra pato", &n);
         teste_roundtrip("banana banana banana", cs, n, "banana");
         teste_roundtrip("Árvore boa! 10 metros, sem (%1) prova\n", cs, n, "ricas");
         teste_roundtrip("3141592653abc XYZ~", cs, n, "dígitos");
         teste_roundtrip("", cs, n, "vazio");
+        teste_roundtrip(SONETO_CAPITAO, cs, n, "soneto do capitão");
 
         // selo-guarita na prática
         int selo = 0;

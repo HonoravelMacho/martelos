@@ -138,10 +138,13 @@ char* cifrar_salto(const char* t, mpz_t* casas, int n, int tipo, const char* f, 
     // Oceano fresco: o cache da esteira não pode cruzar tamanhos de texto
     // distintos no mesmo processo (a esteira maior em cache mudaria tam_e).
     limpar_cache_esteira();
-    char* res = normalizar_fonte95(t);
+    // MALHA UTF-8: a entrada crua entra de pé — acentos, quebras de linha e
+    // qq byte fora da fonte 95 viajam como trios de glifos ("=C3=A9", "=0A").
+    // O texto "plano" visto pela aritmética é 100% fonte 95, por construção.
+    char* res = malha_utf8_encode(t);
     long len = strlen(res);
     if (len == 0) return res; // texto vazio: nada a selar
-    char* plano = strdup(res); // o selo lê o TEXTO CLARO antes das camadas
+    char* plano = strdup(res); // o selo lê o TEXTO CLARO (já malhado) antes das camadas
     // Esteira dimensionada pela MENSAGEM — a casa literal gigante nunca toca
     // a precisão do pi (a lição da "SOMA MODULAR ESTÁVEL" do v2.7).
     char* est = obter_esteira_numerica(tipo, f, len * 120 + 100);
@@ -160,7 +163,7 @@ char* cifrar_salto(const char* t, mpz_t* casas, int n, int tipo, const char* f, 
                 res[i] = fonte95_num_para_char(v + sh);
                 ptr += v;
             }
-            // texto fora da fonte (não deve ocorrer pós-normalização): passa intacto
+            // texto fora da fonte: impossível pós-malha (guarda simbólica)
         }
     }
     char* saida = inserir_selo(res, plano);
@@ -219,15 +222,19 @@ char* decifrar_salto(const char* t, mpz_t* casas, int n, int tipo, const char* f
         char e1, e2; selo_de(plano, &e1, &e2);
         if (e1 == c1 && e2 == c2) {
             if (selo_estado) *selo_estado = 1;
-            free(limpa); free(corpo);
-            return plano;
+            // MALHA UTF-8: o corpo voltou na forma malhada — devolver a entrada
+            // crua byte a byte (acento, quebra de linha e tudo mais de pé).
+            char* cru = malha_utf8_decode(plano);
+            free(limpa); free(corpo); free(plano);
+            return cru;
         }
         free(plano); free(corpo);
     }
     // sem selo válido: decifra cru (mensagem curta, sem selo ou cópia mutilada)
     char* plano2 = decifrar_corpo(limpa, casas, n, tipo, f);
-    free(limpa);
-    return plano2;
+    char* cru2 = malha_utf8_decode(plano2); // canônica: cru volta como veio
+    free(plano2); free(limpa);
+    return cru2;
 }
 
 void liberar_casas(mpz_t* casas, int n) {

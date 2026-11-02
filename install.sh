@@ -21,7 +21,7 @@ else
     fi
 fi
 
-echo "🔨 Instalando M.A.R.T.E.L.O.S. v7.0.0 no $OS..."
+echo "🔨 Instalando M.A.R.T.E.L.O.S. v7.1.0 no $OS..."
 
 # 2. Instalação de Dependências
 # CORREÇÃO v6.3.3: no Termux o pacote é "libgmp" (não "gmp") e o ffprobe
@@ -79,6 +79,6 @@ echo "ℹ️ $( [ "$OS" = "macOS" ] && echo 'macOS' || echo 'Termux' ): registro
 fi
 
 echo "================================================="
-echo "✅ M.A.R.T.E.L.O.S. v7.0.0 INSTALADO COM SUCESSO!"
+echo "✅ M.A.R.T.E.L.O.S. v7.1.0 INSTALADO COM SUCESSO!"
 echo "Operação transparente: Downloads/martelos ativa."
 echo "================================================="
