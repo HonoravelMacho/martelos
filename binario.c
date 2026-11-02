@@ -129,49 +129,67 @@ static void dica_ffmpeg_instalacao(void) {
 // vem de $TMPDIR (Termux: $PREFIX/tmp), com fallback para $PREFIX/tmp e /tmp,
 // e com teste de escrita antes de usar.
 // Retorna o código do system() (0 = ok).
+// CORREÇÃO (PORTE APK): /tmp não existe em app Android; TMPDIR só existe no
+// Termux. Portanto tentamos, EM ORDEM: $TMPDIR, $PREFIX/tmp, diretório atual
+// (cwd = a pasta do arquivo quando invocado pelo porte via Process.run com
+// workingDirectory), $HOME e por último /tmp. O primeiro com escrita vence.
 static void caminho_log_ffmpeg(char* out, size_t n) {
+    const char* candidatos[4];
+    char cwd[1024];
+    int nc = 0;
     const char* td = getenv("TMPDIR");
-    char base[1024];
-    if (td && *td) snprintf(base, sizeof base, "%s", td);
+    if (td && *td) candidatos[nc++] = td;
     else {
         const char* px = getenv("PREFIX"); // Termux: /data/data/com.termux/files/usr
-        if (px && *px) snprintf(base, sizeof base, "%s/tmp", px);
-        else snprintf(base, sizeof base, "/tmp");
+        if (px && *px) { static char pxtmp[1078]; snprintf(pxtmp, sizeof pxtmp, "%s/tmp", px); candidatos[nc++] = pxtmp; }
     }
-    snprintf(out, n, "%s/martelos_ffmpeg_%d.log", base, (int)getpid());
+    if (getcwd(cwd, sizeof cwd)) candidatos[nc++] = cwd;
+    else { const char* h = getenv("HOME"); if (h && *h) candidatos[nc++] = h; }
+    candidatos[nc++] = "/tmp";
+    for (int i = 0; i < nc; i++) {
+        snprintf(out, n, "%s/martelos_ffmpeg_%d.log", candidatos[i], (int)getpid());
+        FILE* t = fopen(out, "w");
+        if (t) { fclose(t); unlink(out); return; }
+    }
+    out[0] = '\0'; // sem local utilizável
 }
 
 static int rodar_ffmpeg(const char* cmd_sem_log, const char* rotulo) {
     char log[1100];
     caminho_log_ffmpeg(log, sizeof log);
-    // Testa se dá para escrever o log; se não der, roda sem log em vez de
-    // quebrar o shell com redirecionamento impossível.
-    int tem_log = 0;
-    {
-        FILE* t = fopen(log, "w");
-        if (t) { fclose(t); tem_log = 1; }
-    }
+    int tem_log = (log[0] != '\0');
     char full[8192];
     if (tem_log) snprintf(full, sizeof full, "%s > /dev/null 2> \"%s\"", cmd_sem_log, log);
     else snprintf(full, sizeof full, "%s > /dev/null 2>&1", cmd_sem_log);
     int rc = system(full);
     if (rc != 0) {
-        printf("[❌] Erro FFmpeg (%s, código %d).\n", rotulo, rc);
+        int sig = rc & 0x7F;
+        int code = (rc >> 8) & 0xFF;
+        // TUDO indentado com 4 espaços: o porte (flutter) junta estas linhas
+        // no SnackBar — a regex dele exige continuação indentada após [❌].
+        if (sig > 0 && sig < 64)
+            printf("[❌] Erro FFmpeg (%s, código %d — morto pelo sinal %d).\n", rotulo, rc, sig);
+        else
+            printf("[❌] Erro FFmpeg (%s, código %d — exit %d).\n", rotulo, rc, code);
+        printf("    comando: %s\n", cmd_sem_log);
         if (tem_log) {
             FILE* lf = fopen(log, "r");
             if (lf) {
                 char linha[512]; int n = 0;
-                printf("---- log do ffmpeg ----\n");
-                while (fgets(linha, sizeof linha, lf) && n < 15) { printf("%s", linha); n++; }
-                if (n == 0) printf("(log vazio)\n");
-                printf("-----------------------\n");
+                printf("    ---- log do ffmpeg ----\n");
+                while (fgets(linha, sizeof linha, lf) && n < 15) {
+                    size_t l = strlen(linha); if (l && linha[l-1] == '\n') linha[l-1] = '\0';
+                    printf("    %s\n", linha); n++;
+                }
+                if (n == 0) printf("    (log vazio — ffmpeg falhou antes de escrever)\n");
+                printf("    ---- fim do log ----\n");
                 fclose(lf);
             } else {
-                printf("(não foi possível ler o log em %s)\n", log);
+                printf("    (não foi possível ler o log em %s)\n", log);
             }
             unlink(log);
         } else {
-            printf("(log do ffmpeg indisponível: sem escrita em %s)\n", log);
+            printf("    (log do ffmpeg indisponível: sem escrita em TMPDIR/cwd/HOME/tmp)\n");
         }
         dica_ffmpeg_instalacao();
     } else if (tem_log) {
@@ -470,9 +488,11 @@ static int iniciar_barra(void) {
 
 // Verificador do cabeçalho .martelos (só metadados: detecta senha/constante
 // diferente na descriptografia; não altera a criptografia em nada).
-static unsigned long martelos_verificador(long* cs, int nf, int tipo_const, const char* formula) {
+// v7: casas em mpz — pega os 32 bits baixos do número (para as somas legadas
+// é o mesmo valor de antes, byte a byte).
+static unsigned long martelos_verificador(mpz_t* casas, int nf, int tipo_const, const char* formula) {
     unsigned long v = (unsigned long)tipo_const * 2654435761UL + 0x9E3779B9UL * (unsigned long)nf;
-    for (int i = 0; i < nf; i++) v = v * 31 + (unsigned long)(cs[i] & 0xffffffffL);
+    for (int i = 0; i < nf; i++) v = v * 31 + (mpz_get_ui(casas[i]) & 0xffffffffUL);
     if (formula) for (const char* q = formula; *q; q++) v = v * 31 + (unsigned char)*q;
     return v & 0xffffffffUL; // cabeçalho guarda 32 bits: máscara aqui para a comparação bater
 }
@@ -486,15 +506,35 @@ int ler_ext_martelos_arquivo(const char* path, char* ext_out) {
     unsigned char cab[9];
     size_t lr = fread(cab, 1, 9, f);
     int ok = 0;
-    if (lr == 9 && memcmp(cab, "MART", 4) == 0 && cab[8] <= MART_MAXEXT && cab[8] > 0 && 9L + cab[8] <= total) {
+    if (lr == 9 && (memcmp(cab, "MR7T", 4) == 0 || memcmp(cab, "MART", 4) == 0) &&
+        cab[8] <= MART_MAXEXT && cab[8] > 0 && 9L + cab[8] <= total) {
         if (fread((unsigned char*)ext_out, 1, cab[8], f) == cab[8]) { ext_out[cab[8]] = '\0'; ok = 1; }
     }
     fclose(f);
     return ok;
 }
 
+// Protocolo do arquivo: 1 = MR7T (v7, salto quântico), 2 = MART (legado v6),
+// 0 = sem cabeçalho (glitch cru da v6 ou arquivo externo).
+// O SEGREDO NÃO DEPENDE DO ESCONDERIJO: é só um marcador para achar as chaves
+// certas na abertura — as próprias casas é que cifram.
+int protocolo_martelos_do_arquivo(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return 0;
+    unsigned char cab[4];
+    size_t lr = fread(cab, 1, 4, f);
+    fclose(f);
+    if (lr < 4) return 0;
+    if (memcmp(cab, "MR7T", 4) == 0) return 1;
+    if (memcmp(cab, "MART", 4) == 0) return 2;
+    return 0;
+}
+
 // O MOTOR DE PRENSAGEM v2.7 (O Chiado Original)
-void processar_binario_core(const char* fip, const char* fop, int acao, int sub_modo, int tipo_const, const char* formula, long* cs, int nf) {
+// v7: casas chegaram como números literais (mpz); os ÚNICOS toques são a
+// redução no oceano da esteira e o marcador do .martelos — a matemática dos
+// bytes segue v2.7 byte a byte (vetores legados do teste guardam isso).
+void processar_binario_core(const char* fip, const char* fop, int acao, int sub_modo, int tipo_const, const char* formula, mpz_t* casas, int nf) {
     char cmd[4096], f_tmp[2048];
     strcpy(f_tmp, fip);
     long h_size = 0, t_size_prot = 0;
@@ -508,28 +548,30 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         if (sub_modo >= 2 && !tem_ffmpeg()) {
             printf("[❌] ffmpeg não encontrado no PATH — impossível prensar mídia.\n");
             dica_ffmpeg_instalacao();
-            free(cs); return;
+            liberar_casas(casas, nf); return;
         }
         if (sub_modo == 2) { // Imagens -> BMP Raw
-            if (!validar_entrada_imagem(fip)) { free(cs); return; }
+            if (!validar_entrada_imagem(fip)) { liberar_casas(casas, nf); return; }
             snprintf(f_tmp, 2048, "%s_prensa.bmp", fip); h_size = 54;
-            // -vf format=bgr24 garante compatibilidade com ffmpeg 4/5/6/7/8 (Termux e desktop).
-            sprintf(cmd, "%s -v error -i \"%s\" -y -vf format=bgr24 \"%s\"", FF_PATH, fip, f_tmp);
-            if (rodar_ffmpeg(cmd, "imagem -> BMP") != 0) { free(cs); return; }
+            // Explicito igual à rota de vídeo (que o Android executa bem):
+            // -vf format=bgr24 + muxer image2 + encoder bmp declarados — nada
+            // depende de adivinhação do formato pelo ffmpeg (evita EINVAL/234).
+            sprintf(cmd, "%s -v error -i \"%s\" -y -vf format=bgr24 -f image2 -c:v bmp \"%s\"", FF_PATH, fip, f_tmp);
+            if (rodar_ffmpeg(cmd, "imagem -> BMP") != 0) { liberar_casas(casas, nf); return; }
         } else if (sub_modo == 3) { // Áudio -> WAV PCM (header detectado, não fixo)
-            if (!validar_entrada_audio(fip)) { free(cs); return; }
+            if (!validar_entrada_audio(fip)) { liberar_casas(casas, nf); return; }
             snprintf(f_tmp, 2048, "%s_prensa.wav", fip);
             // -ac 2 explícito evita falha em builds mínimos (Termux) com entrada mono.
             sprintf(cmd, "%s -v error -i \"%s\" -y -vn -acodec pcm_s16le -ar 44100 -ac 2 \"%s\"", FF_PATH, fip, f_tmp);
-            if (rodar_ffmpeg(cmd, "áudio -> WAV") != 0) { free(cs); return; }
+            if (rodar_ffmpeg(cmd, "áudio -> WAV") != 0) { liberar_casas(casas, nf); return; }
             h_size = detectar_header_wav(f_tmp);
         } else if (sub_modo == 4) { // Vídeo -> AVI RAW (CHIADO CINZA)
-            if (!validar_entrada_video(fip)) { free(cs); return; }
+            if (!validar_entrada_video(fip)) { liberar_casas(casas, nf); return; }
             snprintf(f_tmp, 2048, "%s_prensa.avi", fip); h_size = 10240; t_size_prot = 512000;
             // -vf format=bgr24 (em vez de -pix_fmt), no mesmo estilo da rota de imagem:
             // garante o chiado CINZA em ffmpeg 4..8, Termux e desktop.
             sprintf(cmd, "%s -v error -i \"%s\" -y -vf format=bgr24 -vcodec rawvideo -acodec pcm_s16le -f avi \"%s\"", FF_PATH, fip, f_tmp);
-            if (rodar_ffmpeg(cmd, "vídeo -> AVI raw") != 0) { free(cs); return; }
+            if (rodar_ffmpeg(cmd, "vídeo -> AVI raw") != 0) { liberar_casas(casas, nf); return; }
         }
     } else {
         if (sub_modo == 2) h_size = 54;
@@ -545,12 +587,12 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
             if (fout) { fclose(fout); unlink(fop); } // não deixa .wav de 0 bytes para trás
         }
         else { fclose(fin); printf("[❌] Não consegui criar o arquivo de saída: %s\n", fop); }
-        free(cs); return;
+        liberar_casas(casas, nf); return;
     }
     fseek(fin, 0, SEEK_END); long total_size = ftell(fin); rewind(fin);
     if (total_size <= 0) {
         printf("[❌] Arquivo de entrada vazio (0 bytes): %s\n", f_tmp);
-        fclose(fin); fclose(fout); free(cs); return;
+        fclose(fin); fclose(fout); liberar_casas(casas, nf); return;
     }
 
     // Descriptografia: confere se a entrada parece um glitch gerado pelo martelos.
@@ -569,12 +611,20 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
                 : (sub_modo == 3) ? ".wav de chiado (*_glitch.wav)" : ".avi de chiado (*_glitch.avi)";
             printf("[❌] '%s' não parece um glitch gerado pelo martelos.\n", f_tmp);
             printf("    Para descriptografar, escolha o arquivo %s — não o arquivo original.\n", esperado);
-            fclose(fin); fclose(fout); unlink(fop); free(cs); return;
+            fclose(fin); fclose(fout); unlink(fop); liberar_casas(casas, nf); return;
         }
     }
 
     char* est = obter_esteira_numerica(tipo_const, formula, 2000000);
-    long tam_e = strlen(est), ptr = cs[0];
+    long tam_e = strlen(est);
+    // v7: as casas chegaram como NÚMEROS LITERAIS (mpz, ordem sagrada: AB≠BA).
+    // Só sobra o resto delas no oceano da esteira — a matemática dos bytes é a
+    // da v2.7 intacta (para somas legadas, idêntica: o % final engolia a redução).
+    mpz_t rem; mpz_init(rem);
+    long* offs = malloc((size_t)nf * sizeof(long));
+    for (int j = 0; j < nf; j++) offs[j] = (long)mpz_fdiv_r_ui(rem, casas[j], (unsigned long)tam_e);
+    mpz_clear(rem);
+    long ptr = offs[0];
     unsigned char *buf = malloc(65536);
     clock_t t_i = clock();
 
@@ -584,16 +634,17 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
     if (sub_modo == 4) nfat = mapear_payloads_avi(f_tmp, &fatias);
 
     if (sub_modo == 1) {
-        // .martelos com cabeçalho: "MART" + ver[4] + tam_ext[1] + ext + payload.
-        // Arquivos antigos (sem cabeçalho) usam o modo legado: criptografa tudo.
+        // .martelos com cabeçalho: "MR7T" (v7) ou "MART" (legado v6) + ver[4] +
+        // tam_ext[1] + ext + payload. Arquivos antigos (sem cabeçalho) usam o
+        // modo legado: criptografa tudo.
         if (acao == 1) {
             const char* e = strrchr(fip, '.');
             const char* barra = strrchr(fip, '/');
             char ext_m[MART_MAXEXT + 1] = "";
             if (e && (!barra || e > barra) && strlen(e) <= MART_MAXEXT) strcpy(ext_m, e);
-            unsigned long vv = martelos_verificador(cs, nf, tipo_const, formula);
+            unsigned long vv = martelos_verificador(casas, nf, tipo_const, formula);
             unsigned char cab[9];
-            memcpy(cab, "MART", 4);
+            memcpy(cab, "MR7T", 4);
             cab[4] = (unsigned char)(vv & 0xFF); cab[5] = (unsigned char)((vv >> 8) & 0xFF);
             cab[6] = (unsigned char)((vv >> 16) & 0xFF); cab[7] = (unsigned char)((vv >> 24) & 0xFF);
             cab[8] = (unsigned char)strlen(ext_m);
@@ -604,14 +655,15 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         } else {
             unsigned char cab[9];
             size_t lr = fread(cab, 1, 9, fin);
-            if (lr == 9 && memcmp(cab, "MART", 4) == 0 && cab[8] <= MART_MAXEXT && 9L + cab[8] <= total_size) {
+            if (lr == 9 && (memcmp(cab, "MR7T", 4) == 0 || memcmp(cab, "MART", 4) == 0) &&
+                cab[8] <= MART_MAXEXT && 9L + cab[8] <= total_size) {
                 long base_pay = 9L + cab[8];
                 if (cab[8] > 0) {
                     char tmp[MART_MAXEXT + 1];
                     if (fread(tmp, 1, cab[8], fin) != cab[8]) { rewind(fin); base_pay = 0; }
                 }
                 if (base_pay > 0) {
-                    unsigned long vv = martelos_verificador(cs, nf, tipo_const, formula);
+                    unsigned long vv = martelos_verificador(casas, nf, tipo_const, formula);
                     unsigned long vl = (unsigned long)cab[4] | ((unsigned long)cab[5] << 8) |
                                        ((unsigned long)cab[6] << 16) | ((unsigned long)cab[7] << 24);
                     if (vl != vv)
@@ -630,7 +682,7 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
             for (size_t i = 0; i < r; i++) {
                 unsigned char original = buf[i];
                 for (int j = 0; j < nf; j++) {
-                    long p = (ptr + cs[j]) % tam_e;
+                    long p = (ptr + offs[j]) % tam_e;
                     int s = (est[p]-'0')*100 + (est[(p+1)%tam_e]-'0')*10 + (est[(p+2)%tam_e]-'0');
                     if (acao == 1) buf[i] = (unsigned char)((buf[i] + (s % 256)) % 256);
                     else buf[i] = (unsigned char)((buf[i] - (s % 256) + 256) % 256);
@@ -670,7 +722,7 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
                 for (size_t i = 0; i < r; i++) {
                     unsigned char original = buf[i];
                     for (int j = 0; j < nf; j++) {
-                        long p = (ptr + cs[j]) % tam_e;
+                        long p = (ptr + offs[j]) % tam_e;
                         int s = (est[p]-'0')*100 + (est[(p+1)%tam_e]-'0')*10 + (est[(p+2)%tam_e]-'0');
                         if (acao == 1) buf[i] = (unsigned char)((buf[i] + (s % 256)) % 256);
                         else buf[i] = (unsigned char)((buf[i] - (s % 256) + 256) % 256);
@@ -749,7 +801,7 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
         for (size_t i = 0; i < r; i++) {
             unsigned char original = buf[i];
             for (int j = 0; j < nf; j++) {
-                long p = (ptr + cs[j]) % tam_e;
+                long p = (ptr + offs[j]) % tam_e;
                 int s = (est[p]-'0')*100 + (est[(p+1)%tam_e]-'0')*10 + (est[(p+2)%tam_e]-'0');
                 if (acao == 1) buf[i] = (unsigned char)((buf[i] + (s % 256)) % 256);
                 else buf[i] = (unsigned char)((buf[i] - (s % 256) + 256) % 256);
@@ -814,7 +866,7 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
     // -------- v6.3.7: encrypt de vídeo = AVI cru caótico, como no início --------
 
     if (acao == 1 && sub_modo >= 2) unlink(f_tmp);
-    free(buf); free(cs); free(fatias);
+    free(buf); liberar_casas(casas, nf); free(offs); free(fatias);
 
     // v6.3.5 (vídeo): na descriptografia, converte o *_fix.avi cru (bgr24,
     // ~2.7MB/frame) para *.mp4 (H.264 yuv420p). O AVI crus depende do player
@@ -850,7 +902,7 @@ void processar_binario_core(const char* fip, const char* fop, int acao, int sub_
     printf(" OK! (%.4fs)\n[✅] Finalizado em: %s\n", (double)(clock()-t_i)/CLOCKS_PER_SEC, fop);
 }
 
-void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int sub_modo) {
+void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int sub_modo, int legado) {
     char ni[256], no[300], fip[1024], fop[1024];
 
     // Opera na pasta onde o terminal foi aberto (nada de bancada fixa).
@@ -899,26 +951,39 @@ void processar_arquivo_binario_n_camadas(int tipo, const char* f, int acao, int 
         }
     }
     printf("Camadas? "); int nf; IGNORE_RET(scanf("%d", &nf)); if (nf <= 0) nf = 1; getchar();
-    long* cs = malloc(nf * sizeof(long));
-    for (int i=0; i<nf; i++) { 
-        char m[50]; sprintf(m, "FRASE %d/%d:", i+1, nf); 
-        char* fr = ler_texto_ctrl_d(m); int d; cs[i] = calcular_casa_quiasmo(fr, &d); free(fr); 
+    // Protocolo das chaves: legado==1 = soma v6 (abre o que já existe);
+    // legado==-1 = AUTO pelo cabeçalho (só no modo Martelos); padrão v7 =
+    // casa literal (ordem sagrada: AB != BA), com a camada c lendo sua frase
+    // espelhada c vezes (quiasmo vivo).
+    int legado_chaves = (legado == 1 && acao == 2) ? 1 : (legado == -1 ? -1 : 0);
+    if (legado_chaves == -1) {
+        int proto = protocolo_martelos_do_arquivo(fip);
+        legado_chaves = (proto == 2) ? 1 : 0; // sem cabeçalho: tenta o Salto
+    }
+    mpz_t* casas = malloc(nf * sizeof(mpz_t));
+    for (int i=0; i<nf; i++) mpz_init(casas[i]);
+    for (int i=0; i<nf; i++) {
+        char m[50]; sprintf(m, "FRASE %d/%d:", i+1, nf);
+        char* fr = ler_texto_ctrl_d(m);
+        if (legado_chaves) { int d; mpz_set_ui(casas[i], (unsigned long)calcular_casa_quiasmo(fr, &d)); }
+        else calcular_casa_salto(fr, i, casas[i]);
+        free(fr);
     }
     // v6.3.5: na descriptografia de vídeo, aceitar o novo artefato *_glitch.mp4
     // (átomo 'MART'): extrai o AVI scrambled para um tmp e processa como AVI.
     char tmpmp4[2048];
     const char* fip_real = fip;
     if (acao == 2 && sub_modo == 4 && desempacotar_glitch_mp4(fip, tmpmp4, sizeof tmpmp4)) fip_real = tmpmp4;
-    processar_binario_core(fip_real, fop, acao, sub_modo, tipo, f, cs, nf);
+    processar_binario_core(fip_real, fop, acao, sub_modo, tipo, f, casas, nf);
     if (fip_real != fip) unlink(tmpmp4);
 }
 
-void executar_transmutacao_cli(const char* fip, const char* fop, int acao, int sub_modo, int tipo_const, const char* formula, long* cs, int nf) {
+void executar_transmutacao_cli(const char* fip, const char* fop, int acao, int sub_modo, int tipo_const, const char* formula, mpz_t* casas, int nf) {
     // O core assume a posse do vetor e dá free ao final; aqui duplicamos para
     // que o chamador (processar_flags) continue dono do original e não haja double-free.
-    long* copia = malloc(nf * sizeof(long));
+    mpz_t* copia = malloc(nf * sizeof(mpz_t));
     if (!copia) return;
-    memcpy(copia, cs, nf * sizeof(long));
+    for (int i = 0; i < nf; i++) mpz_init_set(copia[i], casas[i]);
     // v6.3.5: descriptografia de vídeo também abri o artefato *_glitch.mp4.
     char tmpmp4[2048];
     const char* fip_real = fip;

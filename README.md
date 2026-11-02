@@ -2,7 +2,7 @@
 **Motor Algébrico Ruptivo Transformacional Experimental Livre e Open Source**
 
 ![Status](https://img.shields.io/badge/Status-Estável-green)
-![Versão](https://img.shields.io/badge/Versão-v6.3.7-blue)
+![Versão](https://img.shields.io/badge/Versão-v7.0.0%20%22Protocolo%20Salto%20Quântico%22-blue)
 ![Licença](https://img.shields.io/badge/Licença-Apache%202.0-yellow)
 
 M.A.R.T.E.L.O.S. é um manifesto técnico pela **Soberania Algébrica**. Em um mundo de vigilância constante, o projeto foca em segurança **Off-Grid**, autonomia total e na entropia pura extraída de constantes transcendentais do universo.
@@ -91,6 +91,30 @@ No modo CLI (Flags), os arquivos são processados na pasta local `./` onde o ter
 | `-save` | Salvar resultado de texto em `.txt` |
 | `-k` | **Chaves**: Informe a Qtd e as frases entre "#...#" |
 | `-f` | **Fórmula**: Constante (pi, catalan, etc) ou fórmula customizada |
+| `-legado` | Decifrar com as chaves da **v6** (soma antiga) — nada é re-cifrado |
+
+## 🌀 Protocolo Salto Quântico (v7.0.0)
+
+### A fonte 95 — o teclado inteiro
+A cifra v7 usa **todas as 95 teclas ASCII printáveis, em ordem de código**: espaço=1, `!=2`, `0=17`‑`9=26`, `A=34`‑`Z=59`, `a=66`‑`z=91`, `~=95`. Minúsculas, dígitos e **toda a pontuação** têm valor próprio — o balde da v6 (onde todo desconhecido virava `-`) é aposentado. **Exceção:** `\n` saiu da fonte (entra como espaço), então **a letra cifrada nunca contém quebra de linha** — copiar da tela fica honesto.
+
+### A casa literal — a ordem é sagrada
+A frase-chave vira um **número literal em base 95** (posicional, via aritmética de precisão arbitrária GMP): `casa("ab") = 6337`, `casa("ba") = 6431` — **AB ≠ BA**. Um soneto vira um número gigantesco, **sem cap** — e a esteira é dimensionada pela *mensagem*, nunca pela casa, então o π não infla mais.
+
+### O quiasmo vivo — camada c lê espelhado c vezes
+A camada 0 lê sua frase natural; a camada 1 lê a frase **espelhada** (3+ palavras: quiasmo de palavras; até 2: espelho de letras AB↔BA); a camada 2 lê o espelho do espelho... A senha `#abc#` e a senha `#cba#` nas **camadas alternadas** produzem cifras diferentes — trocar a ordem das frases entre camadas muda tudo.
+
+### Selo-guarita — a sentinela no meio
+A cifra v7 nasce com **2 símbolos de selo** no meio esquerdo, derivados como checksum do texto claro (`(Σ valores) mod 83 + 1` e `(Σ ((posição mod 89)+1)·valor) mod 89 + 1` — os primos 83 e 89 escoltam a bagagem; **o segredo não depende do esconderijo, depende da chave**). Na decifra, o selo **confirma integridade**: senha errada ou cópia mutilada → o martelo avisa `sem selo` em vez de derreter em silêncio.
+
+### Compatibilidade v6 — nada recifrado
+- **Texto v6** (`[...]` moldura, fonte 34): abra pelo menu (**Legado**) ou use `-legado` no CLI.
+- **Arquivos `.martelos`**: o cabeçalho decide sozinho — `MR7T` (v7, salto) ou `MART` (v6, legado) — a extensão guardada volta sozinha. Mídia cru da v6 sem marcador: passe `-legado`.
+- Todo o motor de mídia (ffmpeg → BMP/WAV/AVI + o chiado cinza) continuou **byte a byte**; só a origem da casa mudou. As regras do texto novo valem igualmente para imagem, áudio e vídeo.
+
+### ⚠️ Nota sobre `#` na cifra v7
+O `#` agora é **letra de verdade** e pode aparecer na cifra. No CLI ainda funciona (`-s '#cifra#'` descasca só o par externo), mas para cifras com muitos `#` prefira o caminho sem sustos: **`-save`** ou o **menu interativo** (colar direto, sem cerquilhas).
+
 
 ---
 
